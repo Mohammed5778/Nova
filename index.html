@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Nova AI Mobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+  <link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900&amp;family=Space+Grotesk%3Awght%40400%3B500%3B700" onload="this.rel='stylesheet'" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+  <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link rel="stylesheet" href="index.css">
+  <style>
+    body {
+      min-height: 100dvh; 
+      overscroll-behavior-y: contain;
+      font-family: "Space Grotesk", "Noto Sans", sans-serif;
+      margin: 0; 
+    }
+    .app-screen {
+      display: none; 
+      width: 100%;
+      height: 100dvh; 
+      overflow-x: hidden; 
+    }
+    .app-screen.active {
+      display: flex; 
+      flex-direction: column;
+    }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .pb-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+    .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1 }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    .animate-pulse-glow { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes progressBar { 0% { width: 0%; } 100% { width: 100%; } }
+    .animate-progress { animation: progressBar 3s ease-out forwards; }
+    .neon-glow { box-shadow: 0 0 5px #19e5c6, 0 0 10px #19e5c6, 0 0 15px #19e5c6, 0 0 20px #19e5c6; }
+
+    .mic-listening-indicator {
+        display: none;
+        width: 8px;
+        height: 8px;
+        background-color: red;
+        border-radius: 50%;
+        position: absolute;
+        top: 5px;
+        right: 5px;
+    }
+    .mic-button-container.listening .mic-listening-indicator {
+        display: block;
+    }
+    .mic-button-container.listening svg {
+        color: #ff4d4d; 
+    }
+    #voice-mode-toggle.active svg {
+      color: #19e5c6; 
+    }
+    #nova-processing-indicator {
+        transition: opacity 0.3s ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-[#0A100F]">
+
+  <!-- Splash Screen -->
+  <div id="splash-screen" class="app-screen active bg-[#0A100F] justify-center items-center">
+    <div class="relative flex size-full flex-col justify-center items-center group/design-root overflow-hidden">
+      <div class="absolute inset-0 bg-grid-[#19e5c6]/5 opacity-10 pointer-events-none"></div>
+      <div class="flex flex-col items-center justify-center h-full w-full px-8">
+        <div class="w-32 h-32 mb-8 relative flex items-center justify-center">
+          <div class="absolute inset-0 rounded-full bg-[#19e5c6] opacity-30 animate-pulse-glow blur-2xl"></div>
+          <svg class="w-24 h-24 text-[#19e5c6] z-10 animate-pulse-glow" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+            <circle class="opacity-75" cx="12" cy="12" fill="#19e5c6" r="3"></circle>
+          </svg>
+        </div>
+        <h1 class="text-5xl font-bold text-white mb-2 tracking-tighter animate-pulse-glow">Nova</h1>
+        <p class="text-sm font-normal text-[#93c8c0] mb-12">Your Futuristic AI Assistant</p>
+        <div class="w-full max-w-xs">
+          <div class="rounded-full bg-[#1E3A35] h-2.5 overflow-hidden neon-glow opacity-75">
+            <div id="splash-progress-bar" class="h-full rounded-full bg-[#19e5c6] animate-progress" style="width: 0%;"></div>
+          </div>
+          <p class="text-center text-xs text-[#19e5c6] mt-2 opacity-75">Initializing...</p>
+        </div>
+      </div>
+      <div class="absolute bottom-0 left-0 right-0 p-4 text-center">
+        <p class="text-xs text-[#4A5C5A]">Version 1.7.8</p> 
+      </div>
+    </div>
+  </div>
+
+  <!-- Onboarding Screen -->
+  <div id="onboarding-screen" class="app-screen bg-[#11221f] justify-between">
+    <div class="flex flex-col flex-grow">
+      <div class="flex items-center p-4 pb-2 justify-center">
+        <h2 id="onboarding-title" class="text-white text-xl font-bold leading-tight tracking-[-0.015em]">AI Assistant</h2>
+      </div>
+      <div class="flex-grow flex flex-col justify-center">
+        <div class="@container">
+          <div class="@[480px]:px-4 @[480px]:py-3">
+            <div id="onboarding-image" class="w-full bg-center bg-no-repeat bg-cover flex flex-col justify-end overflow-hidden @[480px]:rounded-xl min-h-[30vh] sm:min-h-[40vh] aspect-square mx-auto max-w-md" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDISnZDku6mxFufrdwyE8U_z3gRZvZUH6Sr7mxWY8opjTDKQYYYW4ButLoD-XUfyYe42PyqETKsHsJlrKL83tNQdCJE60dHYZf_WPlpQtZpJ0Zn1HKjhKBHrxuB0mY7ZlveDIl1oKPhbQT5GoxP-abVe_hkaPNsjY4FF-30GfB-wG9C456BvxyI7s1yE0A7J4CFCSN7SQhHazA_I8NTgQryctLNxst4uLDyUV-ZGE9ol4U8MzmCVKUkH5WsMdau8gpXcxZYvPD9Wj0");'></div>
+          </div>
+        </div>
+        <div class="px-6 pt-6 pb-4 text-center">
+          <h id="onboarding-main-text" class="text-white text-3xl font-bold leading-tight tracking-tight">Your Personal AI Companion</h>
+          <p id="onboarding-sub-text" class="text-gray-300 text-lg font-normal leading-relaxed pt-3">
+            Unlock the power of AI with our advanced chatbot. Get instant answers, creative inspiration, and personalized assistance anytime, anywhere.
+          </p>
+        </div>
+      </div>
+      <div id="onboarding-dots" class="flex w-full flex-row items-center justify-center gap-2.5 py-5">
+        <div class="onboarding-dot h-2.5 w-2.5 rounded-full bg-[#19e5c6]"></div>
+        <div class="onboarding-dot h-2.5 w-2.5 rounded-full bg-[#34655e]"></div>
+        <div class="onboarding-dot h-2.5 w-2.5 rounded-full bg-[#34655e]"></div>
+      </div>
+    </div>
+    <div class="px-6 pb-8 pt-4">
+      <div class="flex flex-col sm:flex-row gap-4 justify-between">
+        <button id="onboarding-next-btn" class="flex flex-1 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-14 px-6 bg-[#19e5c6] text-[#11221f] text-lg font-bold leading-normal tracking-wide hover:bg-opacity-90 transition-colors duration-200">
+          <span class="truncate">Next</span>
+        </button>
+        <button id="onboarding-skip-btn" class="flex flex-1 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-14 px-6 bg-[#244742] text-white text-lg font-bold leading-normal tracking-wide hover:bg-opacity-80 transition-colors duration-200">
+          <span class="truncate">Skip</span>
+        </button>
+      </div>
+      <div class="h-5"></div> 
+    </div>
+  </div>
+
+  <!-- Sign In Screen -->
+  <div id="signin-screen" class="app-screen bg-[#11221f] justify-between">
+    <div class="flex flex-col items-center px-6 pt-16 overflow-y-auto">
+      <div class="text-center mb-10">
+        <h1 class="text-4xl font-bold text-white tracking-tight">Welcome Back</h1>
+        <p class="text-sm text-[#93c8c0] mt-2">Sign in to continue your journey.</p>
+      </div>
+      <div class="w-full max-w-md space-y-6">
+        <div class="relative">
+          <span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-[#93c8c0]">email</span>
+          <input class="form-input w-full rounded-xl border-none bg-[#244742] h-14 pl-12 pr-4 text-white placeholder:text-[#93c8c0] focus:ring-2 focus:ring-[#19e5c6] transition-all duration-300" placeholder="Email" type="email"/>
+        </div>
+        <div class="relative">
+          <span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-[#93c8c0]">lock</span>
+          <input class="form-input w-full rounded-xl border-none bg-[#244742] h-14 pl-12 pr-4 text-white placeholder:text-[#93c8c0] focus:ring-2 focus:ring-[#19e5c6] transition-all duration-300" placeholder="Password" type="password"/>
+        </div>
+        <div class="text-right">
+          <a id="forgot-password-link" class="text-sm font-medium text-[#93c8c0] hover:text-[#19e5c6] transition-colors duration-300" href="#">Forgot Password?</a>
+        </div>
+        <button id="signin-btn" class="w-full rounded-full bg-[#19e5c6] h-14 text-[#11221f] text-lg font-bold tracking-wider hover:bg-opacity-90 transition-all duration-300 shadow-lg shadow-[#19e5c6]/30">
+          Sign In
+        </button>
+        <div class="relative flex items-center py-4">
+          <div class="flex-grow border-t border-[#244742]"></div>
+          <span class="flex-shrink mx-4 text-xs text-[#93c8c0] uppercase">Or continue with</span>
+          <div class="flex-grow border-t border-[#244742]"></div>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-4">
+          <button id="google-signin-btn" class="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#244742] h-12 text-white text-sm font-medium hover:bg-[#2f5a54] transition-colors duration-300">
+            <img alt="Google" class="w-5 h-5" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXkKrhNvKBG1vWwLOpSM-y3P1tLzh8BovpwUf60nrXYAlhMMnHSgLE3JOL-TdAe9OeDhUsGE-ORGeZ-TL43mCm6T3h5z7yGKAa5vfuRL17c13RolrHMesqq5K4PRisyOIM8zMKtDu5NblbhW6BFt_gRxlh0CoiA6EdDaLwBaThKmxfbTc4gf-WdQx_kVfQpppzIKwLISH1le-IyBDOM2S54LsSJZwGqSYYUbA8xbo0ppC9ByixksDAPLJUj-NBw5plEwYTTuILctU"/>
+            Google
+          </button>
+          <button id="apple-signin-btn" class="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#244742] h-12 text-white text-sm font-medium hover:bg-[#2f5a54] transition-colors duration-300">
+            <img alt="Apple" class="w-5 h-5 filter invert" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAN2n5taIotTEoOOqsqR7SiEUBtXkqHByzmCsA-djh4BN5QttoAwBkDDAr-2oARfYrwyaA7e7c6oeJXxcuRnl4II7-MXsGDmDAawQI7MvMk7EJ-ePfpW51VFNvo8debsXxQBLqiSqLV1V6oN5-SVVKiUJLoNi9SgrYjSEVEifBLKRbks_K3-zwolHro3R2zn9PhgABsLKvDUq-5S8NhO4sC24pRUnENp4ihtKCQ4i623MZ_rZThR6y098xyiHepRUCx3_K9EKVTah4"/>
+            Apple
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="pb-8 pt-12 text-center shrink-0">
+      <p class="text-sm text-[#93c8c0]">
+        Don't have an account?
+        <a id="signup-link" class="font-medium text-[#19e5c6] hover:underline" href="#">Sign Up</a>
+      </p>
+    </div>
+  </div>
+  
+  <!-- Chat List Screen -->
+  <div id="chat-list-screen" class="app-screen bg-[#0D1A18] justify-between">
+    <div class="flex-grow flex flex-col overflow-hidden">
+      <header class="sticky top-0 z-10 bg-[#0D1A18]/80 backdrop-blur-md shrink-0">
+        <div class="flex items-center p-4 pb-3 justify-between">
+          <div class="w-12"></div>
+          <h1 class="text-xl font-bold text-white tracking-tight flex-1 text-center">Chats</h1>
+          <button id="chat-list-new-chat-header-btn" aria-label="New Chat" class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-[#19E5C6]/10 active:bg-[#19E5C6]/20 transition-colors">
+            <svg fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px" xmlns="http://www.w3.org/2000/svg">
+              <path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="px-4 pb-3 pt-1">
+          <div class="relative">
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+              <svg class="text-[#7A9A94]" fill="currentColor" height="20px" viewBox="0 0 256 256" width="20px" xmlns="http://www.w3.org/2000/svg">
+                <path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"></path>
+              </svg>
+            </div>
+            <input class="form-input block w-full rounded-xl border-none bg-[#1B302C] py-3 pl-11 pr-4 text-base text-white placeholder:text-[#7A9A94] focus:outline-none focus:ring-2 focus:ring-[#19E5C6] focus:ring-offset-2 focus:ring-offset-[#0D1A18] transition-shadow" placeholder="Search conversations..." value=""/>
+          </div>
+        </div>
+        <div class="flex gap-2 px-4 pb-3 overflow-x-auto scrollbar-hide">
+          <button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#19E5C6] px-4 text-sm font-medium text-[#0D1A18] transition-colors hover:bg-opacity-80">All</button>
+          <button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#1B302C] px-4 text-sm font-medium text-[#C2E0DB] transition-colors hover:bg-[#244742]">Work</button>
+          <button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#1B302C] px-4 text-sm font-medium text-[#C2E0DB] transition-colors hover:bg-[#244742]">Personal</button>
+        </div>
+      </header>
+      <main id="chat-list-items-container" class="flex-grow divide-y divide-[#1B302C] overflow-y-auto">
+      </main>
+    </div>
+    <nav class="bottom-nav sticky bottom-0 bg-[#0D1A18]/80 backdrop-blur-md border-t border-[#1B302C] shrink-0">
+      <div class="flex justify-around items-center px-2 pt-2 pb-safe-bottom">
+        <button data-target="chat-list-screen-home" class="nav-item active flex flex-col items-center justify-end gap-0.5 text-[#19E5C6] hover:text-opacity-80 transition-colors w-1/4 py-1">
+          <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
+            <path d="M213.59,106.35l-80-75.48a16.14,16.14,0,0,0-21.18,0l-80,75.48A16,16,0,0,0,24,118.19V208a16,16,0,0,0,16,16H88a16,16,0,0,0,16-16V160h48v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V118.19A16,16,0,0,0,213.59,106.35ZM208,208H168V152a8,8,0,0,0-8-8H96a8,8,0,0,0-8,8v56H48V118.19l74.42-70.21a.3.3,0,0,1,.1-.09.74.74,0,0,1,.11-.06,1.14,1.14,0,0,1,.22-.1,1.78,1.78,0,0,1,.27-.08,1.13,1.13,0,0,1,1.14,0,1.17,1.17,0,0,1,.27.08,1.14,1.14,0,0,1,.22.1l.11.06.1.09L208,118.19Z"></path>
+          </svg>
+          <span class="text-xs font-medium">Home</span>
+        </button>
+        <button data-target="image-studio-screen" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
+          <span class="material-symbols-outlined">imagesmode</span>
+          <span class="text-xs">Image Studio</span>
+        </button>
+        <button data-target="chat-screen" id="chat-list-new-chat-nav-btn" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
+          <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128,32a96,96,0,1,0,96,96A96.11,96.11,0,0,0,128,32Zm0,176a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Zm40-88a8,8,0,0,1-8,8H136v24a8,8,0,0,1-16,0V128H96a8,8,0,0,1,0-16h24V88a8,8,0,0,1,16,0v24h24A8,8,0,0,1,168,120Z" fill-rule="evenodd"></path>
+          </svg>
+          <span class="text-xs">New Chat</span>
+        </button>
+        <button data-target="profile-screen" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
+           <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm40-96a40,40,0,1,1-40-40A40,40,0,0,1,168,120Z"></path>
+          </svg>
+          <span class="text-xs">Profile</span>
+        </button>
+      </div>
+      <div class="h-[calc(env(safe-area-inset-bottom)/2)]"></div>
+    </nav>
+  </div>
+
+  <!-- Home / Chat Screen -->
+  <div id="chat-screen" class="app-screen bg-[#0C1A18] justify-between">
+    <div class="flex-grow overflow-hidden flex flex-col">
+        <div class="sticky top-0 z-10 flex items-center bg-[#0C1A18]/80 backdrop-blur-md p-4 pb-3 justify-between border-b border-[#19e5c6]/20 shrink-0">
+            <div class="w-12 flex items-center">
+              <button id="chat-back-btn" aria-label="Back to chats" class="text-[#19e5c6] p-2 -ml-2">
+                <span class="material-symbols-outlined text-3xl">arrow_back_ios_new</span>
+              </button>
+            </div> 
+            <h2 id="chat-screen-title" class="text-white text-xl font-bold leading-tight tracking-[-0.015em] flex-1 text-center truncate px-2">Nova</h2>
+            <div class="flex w-auto items-center justify-end space-x-1">
+              <button id="toggle-process-log-btn" aria-label="Toggle Process Log" class="flex items-center justify-center rounded-full h-10 w-10 text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200">
+                <span class="material-symbols-outlined">list_alt</span>
+              </button>
+              <button id="chat-settings-btn" aria-label="Settings" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 w-10 bg-transparent text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200">
+                  <div class="text-[#19e5c6]" data-icon="Gear" data-size="24px" data-weight="regular">
+                  <svg fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm88-29.84q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.21,107.21,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.71,107.71,0,0,0-26.25-10.87,8,8,0,0,0-7.06,1.49L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.21,107.21,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06Zm-16.1-6.5a73.93,73.93,0,0,1,0,8.68,8,8,0,0,0,1.74,5.48l14.19,17.73a91.57,91.57,0,0,1-6.23,15L187,173.11a8,8,0,0,0-5.1,2.64,74.11,74.11,0,0,1-6.14,6.14,8,8,0,0,0-2.64,5.1l-2.51,22.58a91.32,91.32,0,0,1-15,6.23l-17.74-14.19a8,8,0,0,0-5-1.75h-.48a73.93,73.93,0,0,1-8.68,0,8,8,0,0,0-5.48,1.74L100.45,215.8a91.57,91.57,0,0,1-15-6.23L82.89,187a8,8,0,0,0-2.64-5.1,74.11,74.11,0,0,1-6.14-6.14,8,8,0,0,0-5.1-2.64L46.43,170.6a91.32,91.32,0,0,1-6.23-15l14.19-17.74a8,8,0,0,0,1.74-5.48,73.93,73.93,0,0,1,0-8.68,8,8,0,0,0-1.74-5.48L40.2,100.45a91.57,91.57,0,0,1,6.23-15L69,82.89a8,8,0,0,0,5.1-2.64,74.11,74.11,0,0,1,6.14-6.14A8,8,0,0,0,82.89,69L85.4,46.43a91.32,91.32,0,0,1,15-6.23l17.74,14.19a8,8,0,0,0,5.48,1.74,73.93,73.93,0,0,1,8.68,0,8,8,0,0,0,5.48-1.74L155.55,40.2a91.57,91.57,0,0,1,15,6.23L173.11,69a8,8,0,0,0,2.64,5.1,74.11,74.11,0,0,1,6.14,6.14,8,8,0,0,0,5.1,2.64l22.58,2.51a91.32,91.32,0,0,1,6.23,15l-14.19,17.74A8,8,0,0,0,199.87,123.66Z"></path>
+                  </svg>
+                  </div>
+              </button>
+            </div>
+        </div>
+        <div id="chat-messages-container" class="flex-grow overflow-y-auto pb-4 flex flex-col">
+        </div>
+    </div>
+    
+    <div class="bg-[#0C1A18]/80 backdrop-blur-md border-t border-[#19e5c6]/20 pt-3 pb-1 shrink-0">
+      <div id="nova-processing-indicator" class="text-center text-xs text-[#A0E1D9] py-1 px-4" style="display: none;">Nova is processing...</div>
+      <div id="nova-image-processing-indicator" class="text-center text-xs text-[#A0E1D9] py-1 px-4" style="display: none;">Nova is creating an image...</div>
+      <div class="flex gap-2.5 px-4 pb-3 overflow-x-auto scrollbar-hide">
+        <button class="suggested-prompt-btn flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#1A3A35] hover:bg-[#1F4B44] transition-colors duration-200 px-4 text-sm font-medium text-[#19e5c6] shadow-sm">
+          Plan a trip
+        </button>
+        <button class="suggested-prompt-btn flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#1A3A35] hover:bg-[#1F4B44] transition-colors duration-200 px-4 text-sm font-medium text-[#19e5c6] shadow-sm">
+          Summarize this
+        </button>
+        <button class="suggested-prompt-btn flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#1A3A35] hover:bg-[#1F4B44] transition-colors duration-200 px-4 text-sm font-medium text-[#19e5c6] shadow-sm">
+          Translate
+        </button>
+      </div>
+      <div class="flex items-end px-3 py-2 gap-2 @container">
+        <button id="code-canvas-button" aria-label="Open Code Canvas" class="flex items-center justify-center p-3 h-12 w-12 bg-[#1A3A35] text-[#A0E1D9] hover:text-[#19e5c6] rounded-xl shadow-md hover:bg-[#1F4B44] transition-colors duration-200 shrink-0">
+            <span class="material-symbols-outlined">code</span>
+        </button>
+        <button id="generate-image-chat-button" aria-label="Generate Image in Chat" class="flex items-center justify-center p-3 h-12 w-12 bg-[#1A3A35] text-[#A0E1D9] hover:text-[#19e5c6] rounded-xl shadow-md hover:bg-[#1F4B44] transition-colors duration-200 shrink-0">
+            <span class="material-symbols-outlined">image</span>
+        </button>
+        <div class="flex w-full items-stretch rounded-xl bg-[#1A3A35] shadow-md">
+          <input id="chat-input" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-l-xl text-white focus:outline-0 focus:ring-2 focus:ring-[#19e5c6]/50 border-none bg-transparent h-12 placeholder:text-[#A0E1D9]/70 px-4 text-base font-normal leading-normal" placeholder="Ask Nova anything..." value=""/>
+          <div class="flex items-center rounded-r-xl">
+            <button id="voice-mode-toggle" aria-label="Toggle Voice Mode" class="flex items-center justify-center p-3 text-gray-400 hover:text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200 h-full">
+                <span class="material-symbols-outlined">graphic_eq</span> 
+            </button>
+            <button id="mic-button" aria-label="Use microphone" class="mic-button-container relative flex items-center justify-center p-3 text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200 h-full rounded-r-xl">
+                <div class="text-[#19e5c6]" data-icon="Microphone" data-size="24px" data-weight="fill">
+                <svg fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px" xmlns="http://www.w3.org/2000/svg"><path d="M128,176a48.05,48.05,0,0,0,48-48V64a48,48,0,0,0-96,0v64A48.05,48.05,0,0,0,128,176ZM96,64a32,32,0,0,1,64,0v64a32,32,0,0,1-64,0Zm40,143.6V232a8,8,0,0,1-16,0V207.6A80.11,80.11,0,0,1,48,128a8,8,0,0,1,16,0,64,64,0,0,0,128,0,8,8,0,0,1,16,0A80.11,80.11,0,0,1,136,207.6Z"></path></svg>
+                </div>
+                <div class="mic-listening-indicator"></div>
+            </button>
+          </div>
+        </div>
+        <button id="send-chat-button" aria-label="Send message" class="flex items-center justify-center p-3 h-12 w-12 bg-[#19e5c6] text-[#0C1A18] rounded-xl shadow-md hover:bg-[#15c4a9] transition-colors duration-200 shrink-0">
+          <svg class="feather feather-arrow-up" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+            <line x1="12" x2="12" y1="19" y2="5"></line>
+            <polyline points="5 12 12 5 19 12"></polyline>
+          </svg>
+        </button>
+      </div>
+      <div class="h-2 bg-transparent"></div> 
+    </div>
+  </div>
+
+  <!-- Process Log Panel (Side Panel) -->
+  <div id="process-log-panel" class="process-log-panel">
+    <div class="process-log-header">
+        <h3 class="process-log-title">Process Log</h3>
+        <button id="process-log-close-btn" aria-label="Close Process Log">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+    <ul id="process-log-list" class="scrollbar-hide"></ul>
+  </div>
+
+
+  <!-- AI Personality Settings Screen -->
+  <div id="settings-screen" class="app-screen bg-[#11221f] justify-between">
+    <div class="flex-grow overflow-y-auto px-4 flex flex-col">
+      <header class="flex items-center py-4 sticky top-0 bg-[#11221f] z-10 -mx-4 px-4 shrink-0">
+        <button id="settings-back-btn" aria-label="Back" class="text-white p-2 -ml-2">
+          <span class="material-symbols-outlined text-3xl"> arrow_back_ios_new </span>
+        </button>
+        <h1 class="text-xl font-bold text-white flex-1 text-center pr-10">Settings</h1>
+      </header>
+      <main class="flex-grow overflow-y-auto scrollbar-hide">
+        <section class="py-4">
+          <h2 class="text-lg font-semibold text-[#e0e0e0] mb-3">AI Tone</h2>
+          <div class="flex space-x-3">
+            <label class="flex-1 text-sm font-medium leading-normal flex items-center justify-center rounded-lg border border-[#34655e] px-4 py-3 text-white has-[:checked]:border-2 has-[:checked]:border-[#19e5c6] has-[:checked]:bg-[#19e5c6]/10 relative cursor-pointer transition-all duration-200 ease-in-out">
+              <span class="material-symbols-outlined mr-2 text-[#19e5c6] opacity-0 has-[:checked]:opacity-100 transition-opacity"> sentiment_satisfied </span>
+              Friendly
+              <input id="setting-ai-tone-friendly" class="invisible absolute" name="ai_tone" type="radio" value="friendly"/>
+            </label>
+            <label class="flex-1 text-sm font-medium leading-normal flex items-center justify-center rounded-lg border border-[#34655e] px-4 py-3 text-white has-[:checked]:border-2 has-[:checked]:border-[#19e5c6] has-[:checked]:bg-[#19e5c6]/10 relative cursor-pointer transition-all duration-200 ease-in-out">
+              <span class="material-symbols-outlined mr-2 text-[#19e5c6] opacity-0 has-[:checked]:opacity-100 transition-opacity"> business_center </span>
+              Formal
+              <input id="setting-ai-tone-formal" class="invisible absolute" name="ai_tone" type="radio" value="formal"/>
+            </label>
+            <label class="flex-1 text-sm font-medium leading-normal flex items-center justify-center rounded-lg border border-[#34655e] px-4 py-3 text-white has-[:checked]:border-2 has-[:checked]:border-[#19e5c6] has-[:checked]:bg-[#19e5c6]/10 relative cursor-pointer transition-all duration-200 ease-in-out">
+              <span class="material-symbols-outlined mr-2 text-[#19e5c6] opacity-0 has-[:checked]:opacity-100 transition-opacity"> draw </span>
+              Creative
+              <input id="setting-ai-tone-creative" class="invisible absolute" name="ai_tone" type="radio" value="creative"/>
+            </label>
+          </div>
+        </section>
+        <section class="py-4 space-y-3">
+          <h2 class="text-lg font-semibold text-[#e0e0e0] mb-3">Features</h2>
+           <div class="bg-[#1a322f] p-4 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <span class="material-symbols-outlined text-[#19e5c6] mr-3"> record_voice_over </span>
+                        <span class="text-white text-base font-normal">Voice Output (TTS)</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input id="setting-tts-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Voice Output">
+                        <div class="w-11 h-6 bg-[#34655e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#19e5c6]"></div>
+                    </label>
+                </div>
+            </div>
+            <div class="bg-[#1a322f] p-4 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <span class="material-symbols-outlined text-[#19e5c6] mr-3">travel_explore</span>
+                        <span class="text-white text-base font-normal">Enable Internet Search</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input id="setting-internet-search-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Internet Search">
+                        <div class="w-11 h-6 bg-[#34655e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#19e5c6]"></div>
+                    </label>
+                </div>
+            </div>
+            <div class="bg-[#1a322f] p-4 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <span class="material-symbols-outlined text-[#19e5c6] mr-3">psychology</span>
+                        <span class="text-white text-base font-normal">Enable Deep Thinking</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input id="setting-deep-thinking-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Deep Thinking">
+                        <div class="w-11 h-6 bg-[#34655e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#19e5c6]"></div>
+                    </label>
+                </div>
+            </div>
+        </section>
+        <section class="py-4">
+          <h2 class="text-lg font-semibold text-[#e0e0e0] mb-3">Appearance</h2>
+          <div class="bg-[#1a322f] p-4 rounded-lg">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center">
+                <span class="material-symbols-outlined text-[#19e5c6] mr-3"> dark_mode </span>
+                <span class="text-white text-base font-normal">Dark Mode</span>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="setting-dark-mode-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Dark Mode">
+                <div class="w-11 h-6 bg-[#34655e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#19e5c6]"></div>
+              </label>
+            </div>
+          </div>
+        </section>
+         <section class="py-4">
+          <h2 class="text-lg font-semibold text-[#e0e0e0] mb-3">Other</h2>
+          <button class="flex items-center w-full bg-[#1a322f] p-4 rounded-lg hover:bg-[#244742] transition-colors duration-200">
+            <span class="material-symbols-outlined text-[#19e5c6] mr-3"> translate </span>
+            <span class="text-white text-base font-normal flex-1 text-left">Language (App UI)</span>
+            <span class="text-[#93c8c0] text-sm mr-2">English</span>
+            <span class="material-symbols-outlined text-[#93c8c0]"> chevron_right </span>
+          </button>
+          <div class="mt-3 bg-[#1a322f] p-4 rounded-lg">
+            <div class="flex items-start">
+                <span class="material-symbols-outlined text-[#19e5c6] mr-3 mt-1">badge</span>
+                <div class="text-white text-sm flex-grow">
+                    <p class="font-medium">Developer Information</p>
+                    <p class="mt-1 text-xs text-[#c2e0db]">Mohamed Ibrahim Abdullah</p>
+                    <p class="mt-1 text-xs text-[#c2e0db]">
+                        Contact (WhatsApp & Calls): 
+                        <a href="tel:+201128966996" class="text-[#19e5c6] hover:underline">+201128966996</a>
+                    </p>
+                </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <nav class="bottom-nav sticky bottom-0 left-0 right-0 border-t border-[#244742] bg-[#1a322f]/80 backdrop-blur-md shrink-0">
+      <div class="flex justify-around items-center px-2 pt-2 pb-safe-bottom">
+        <button data-target="chat-list-screen-home" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4"> 
+          <span class="material-symbols-outlined">home</span>
+          <span class="text-xs">Home</span>
+        </button>
+        <button data-target="image-studio-screen" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4"> 
+          <span class="material-symbols-outlined">imagesmode</span>
+          <span class="text-xs">Image Studio</span>
+        </button>
+         <button data-target="profile-screen" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4"> 
+          <span class="material-symbols-outlined">person</span>
+          <span class="text-xs">Profile</span>
+        </button>
+        <button data-target="settings-screen" class="nav-item active flex flex-col items-center justify-end gap-1 text-[#19E5C6] p-2 w-1/4"> 
+          <span class="material-symbols-outlined filled">settings</span>
+          <span class="text-xs font-semibold">Settings</span>
+        </button>
+      </div>
+      <div class="h-[calc(env(safe-area-inset-bottom)/2)]"></div> 
+    </nav>
+  </div>
+
+  <!-- Profile Screen -->
+  <div id="profile-screen" class="app-screen bg-[#11221f] justify-between">
+    <div class="flex-grow overflow-y-auto px-4 flex flex-col">
+        <header class="flex items-center py-4 sticky top-0 bg-[#11221f] z-10 -mx-4 px-4 shrink-0 border-b border-[#19e5c6]/20">
+            <div class="w-10">
+                 <button id="profile-back-btn" aria-label="Back" class="text-white p-2 -ml-2 hidden">
+                    <span class="material-symbols-outlined text-3xl"> arrow_back_ios_new </span>
+                </button>
+            </div> 
+            <h1 class="text-xl font-bold text-white flex-1 text-center">Profile</h1>
+            <div class="w-10"></div> 
+        </header>
+        <main class="flex-grow flex flex-col items-center justify-center text-white p-8">
+            <span class="material-symbols-outlined text-7xl text-[#19e5c6] mb-4">account_circle</span>
+            <h2 id="profile-user-name" class="text-2xl font-bold mb-2">User Name</h2>
+            <p id="profile-user-email" class="text-lg text-[#93c8c0] mb-6">user.email@example.com</p>
+            <div id="profile-user-details" class="text-sm text-gray-300 mt-4 text-left w-full max-w-md">
+              <h3 class="font-semibold text-[#19e5c6] mb-1">Interests:</h3>
+              <p id="profile-interests" class="mb-3 text-xs break-words">Not yet recorded.</p>
+              <h3 class="font-semibold text-[#19e5c6] mb-1">Preferences:</h3>
+              <p id="profile-preferences" class="mb-3 text-xs break-words">Not yet recorded.</p>
+              <h3 class="font-semibold text-[#19e5c6] mb-1">Facts:</h3>
+              <p id="profile-facts" class="text-xs break-words">Not yet recorded.</p>
+            </div>
+            <button class="bg-[#19e5c6] text-[#11221f] font-bold py-3 px-6 rounded-full hover:bg-opacity-90 transition-colors duration-200 mt-8">
+                Edit Profile (Soon)
+            </button>
+        </main>
+    </div>
+    <nav class="bottom-nav sticky bottom-0 left-0 right-0 border-t border-[#244742] bg-[#1a322f]/80 backdrop-blur-md shrink-0">
+        <div class="flex justify-around items-center px-2 pt-2 pb-safe-bottom">
+           <button data-target="chat-list-screen-home" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-xs">Home</span>
+            </button>
+            <button data-target="image-studio-screen" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4">
+                <span class="material-symbols-outlined">imagesmode</span>
+                <span class="text-xs">Image Studio</span>
+            </button>
+            <button data-target="chat-screen" id="profile-new-chat-nav-btn" class="nav-item flex flex-col items-center justify-end gap-1 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
+                <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M128,32a96,96,0,1,0,96,96A96.11,96.11,0,0,0,128,32Zm0,176a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Zm40-88a8,8,0,0,1-8,8H136v24a8,8,0,0,1-16,0V128H96a8,8,0,0,1,0-16h24V88a8,8,0,0,1,16,0v24h24A8,8,0,0,1,168,120Z" fill-rule="evenodd"></path>
+                </svg>
+                <span class="text-xs">New Chat</span>
+            </button>
+            <button data-target="profile-screen" class="nav-item active flex flex-col items-center justify-end gap-1 text-[#19E5C6] p-2 w-1/4">
+                <span class="material-symbols-outlined filled">person</span>
+                <span class="text-xs font-semibold">Profile</span>
+            </button>
+        </div>
+      <div class="h-[calc(env(safe-area-inset-bottom)/2)]"></div>
+    </nav>
+</div>
+
+  <!-- In-app Webview Screen -->
+  <div id="webview-screen" class="app-screen fixed inset-0 bg-black/70 backdrop-blur-sm z-50 justify-center items-center p-4">
+    <div class="bg-[#0D1A18] w-full h-full rounded-xl flex flex-col overflow-hidden shadow-2xl border border-[#19e5c6]/30">
+        <header class="flex items-center justify-between p-3 border-b border-[#19e5c6]/20 shrink-0">
+            <h3 id="webview-title" class="text-sm font-semibold text-white truncate flex-1 pr-2">Loading...</h3>
+            <button id="webview-close-btn" aria-label="Close webview" class="text-[#19e5c6] hover:text-opacity-80 p-1 rounded-full hover:bg-[#19e5c6]/10">
+                <span class="material-symbols-outlined text-2xl">close</span>
+            </button>
+        </header>
+        <div id="webview-loading" class="flex-grow flex items-center justify-center text-[#19e5c6]">
+            <svg class="animate-spin h-8 w-8 text-[#19e5c6]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </div>
+        <iframe id="webview-frame" class="w-full flex-grow border-0" style="display: none;"></iframe>
+    </div>
+  </div>
+
+  <!-- In-app Image Viewer Screen -->
+   <div id="image-viewer-screen" class="app-screen fixed inset-0 bg-black/80 backdrop-blur-md z-50 justify-center items-center p-4">
+    <div class="bg-transparent w-full h-full flex flex-col items-center justify-center relative">
+        <button id="image-viewer-close-btn" aria-label="Close image viewer" class="absolute top-4 right-4 text-white hover:text-opacity-80 p-2 rounded-full bg-black/30 hover:bg-black/50">
+            <span class="material-symbols-outlined text-3xl">close</span>
+        </button>
+        <img id="image-viewer-img" src="" alt="Full screen image" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl"/>
+    </div>
+  </div>
+
+  <!-- Code Canvas Screen -->
+  <div id="code-canvas-screen" class="app-screen bg-[#0A100F] justify-between">
+    <div class="flex-grow overflow-hidden flex flex-col"> <!-- Outer flex container -->
+        <header class="sticky top-0 z-10 flex items-center bg-[#0C1A18]/80 backdrop-blur-md p-4 justify-between border-b border-[#19e5c6]/20 shrink-0">
+            <div class="w-12"></div>
+            <h2 class="text-white text-xl font-bold">Code Canvas</h2>
+            <div class="w-12 flex justify-end">
+                <button id="code-canvas-close-btn" aria-label="Close Code Canvas" class="text-[#19e5c6] p-2 -mr-2">
+                    <span class="material-symbols-outlined text-3xl">close</span>
+                </button>
+            </div>
+        </header>
+        <div id="code-canvas-main-content" class="flex-grow p-4 flex flex-col overflow-hidden relative"> 
+            <div id="code-editor-wrapper" class="flex flex-col min-h-0 h-full relative">
+                <textarea id="code-canvas-textarea" class="w-full flex-grow bg-[#1A3A35] text-white p-3 rounded-lg border border-[#244742] focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] font-mono text-sm scrollbar-hide resize-none" placeholder="Enter HTML, CSS, and JS. Preview updates automatically when active."></textarea>
+                <iframe id="code-canvas-inline-preview-iframe" class="w-full h-full bg-white rounded-lg border border-[#244742]" style="display: none;" sandbox="allow-scripts allow-same-origin"></iframe>
+            </div>
+        </div>
+        <footer class="p-3 border-t border-[#19e5c6]/20 shrink-0 bg-[#0C1A18]/80 backdrop-blur-md flex items-center gap-3">
+            <button id="code-canvas-toggle-view-btn" class="flex-1 rounded-full bg-[#19e5c6] h-12 text-[#11221f] text-base font-bold hover:bg-opacity-80 transition-colors duration-200">
+                Show Preview
+            </button>
+             <button id="code-canvas-enter-fullscreen-btn" aria-label="Enter Fullscreen Preview" class="p-2 rounded-full text-[#A0E1D9] hover:text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200 hidden">
+                <span class="material-symbols-outlined text-2xl">open_in_full</span>
+            </button>
+            <button id="code-canvas-copy-to-chat-btn" class="flex-1 rounded-full bg-[#1A3A35] h-12 text-[#19e5c6] text-base font-bold hover:bg-[#1F4B44] transition-colors duration-200">
+                Copy to Chat
+            </button>
+        </footer>
+    </div>
+  </div>
+
+  <!-- Full Screen Preview Overlay -->
+  <div id="full-screen-preview-overlay" class="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex flex-col p-4" style="display: none;">
+    <header class="flex justify-end mb-2 shrink-0">
+        <button id="full-screen-preview-close-btn" aria-label="Close Fullscreen Preview" class="text-white bg-black/30 hover:bg-black/50 rounded-full p-2">
+            <span class="material-symbols-outlined text-3xl">close</span>
+        </button>
+    </header>
+    <div class="flex-grow min-h-0">
+      <iframe id="full-screen-preview-iframe" class="w-full h-full bg-white rounded-lg border border-gray-600" sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+  </div>
+
+  <!-- Image Studio Screen -->
+  <div id="image-studio-screen" class="app-screen bg-[#0D1A18] justify-between">
+    <div class="flex-grow flex flex-col overflow-hidden">
+        <header class="sticky top-0 z-10 bg-[#0D1A18]/80 backdrop-blur-md shrink-0">
+            <div class="flex items-center p-4 pb-3 justify-center">
+                <h1 class="text-xl font-bold text-white tracking-tight">Image Studio</h1>
+            </div>
+        </header>
+        <main class="flex-grow p-4 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
+            <div>
+                <label for="image-studio-prompt-input" class="block text-sm font-medium text-[#A0E1D9] mb-1">Image Prompt</label>
+                <textarea id="image-studio-prompt-input" rows="3" class="form-textarea w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] placeholder:text-[#7A9A94]" placeholder="e.g., A majestic lion in a vibrant jungle, hyperrealistic"></textarea>
+            </div>
+             <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="image-studio-seed-input" class="block text-sm font-medium text-[#A0E1D9] mb-1">Seed (Optional)</label>
+                    <input type="number" id="image-studio-seed-input" class="form-input w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] placeholder:text-[#7A9A94]" placeholder="e.g., 12345">
+                </div>
+                <div>
+                    <label for="image-studio-aspect-ratio-select" class="block text-sm font-medium text-[#A0E1D9] mb-1">Aspect Ratio</label>
+                    <select id="image-studio-aspect-ratio-select" class="form-select w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6]">
+                        <option value="1:1" selected>1:1 (Square)</option>
+                        <option value="16:9">16:9 (Landscape)</option>
+                        <option value="9:16">9:16 (Portrait)</option>
+                        <option value="4:3">4:3 (Standard)</option>
+                        <option value="3:4">3:4 (Tall)</option>
+                    </select>
+                </div>
+            </div>
+            <button id="image-studio-generate-btn" class="w-full rounded-full bg-[#19e5c6] h-12 text-[#11221f] text-base font-bold hover:bg-opacity-80 transition-colors duration-200 flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined">auto_awesome</span>
+                Generate Images
+            </button>
+            <div id="image-studio-loading-indicator" class="text-center py-4 text-[#A0E1D9]" style="display: none;">
+                <div class="flex flex-col items-center justify-center">
+                    <svg class="animate-spin h-8 w-8 text-[#19e5c6] mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating your masterpieces...
+                </div>
+            </div>
+            <div id="image-studio-error-message" class="text-center py-2 text-red-400" style="display: none;"></div>
+            <div id="image-studio-grid" class="grid grid-cols-2 gap-3">
+                <!-- Image placeholders will be populated by JS -->
+            </div>
+             <button id="image-studio-download-all-btn" class="w-full mt-2 rounded-full bg-[#1A3A35] h-11 text-[#19e5c6] text-sm font-bold hover:bg-[#1F4B44] transition-colors duration-200 flex items-center justify-center gap-2" style="display: none;">
+                <span class="material-symbols-outlined">download_for_offline</span>
+                Download All Images
+            </button>
+        </main>
+    </div>
+    <nav class="bottom-nav sticky bottom-0 bg-[#0D1A18]/80 backdrop-blur-md border-t border-[#1B302C] shrink-0">
+      <div class="flex justify-around items-center px-2 pt-2 pb-safe-bottom">
+        <button data-target="chat-list-screen-home" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
+          <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
+            <path d="M213.59,106.35l-80-75.48a16.14,16.14,0,0,0-21.18,0l-80,75.48A16,16,0,0,0,24,118.19V208a16,16,0,0,0,16,16H88a16,16,0,0,0,16-16V160h48v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V118.19A16,16,0,0,0,213.59,106.35ZM208,208H168V152a8,8,0,0,0-8-8H96a8,8,0,0,0-8,8v56H48V118.19l74.42-70.21a.3.3,0,0,1,.1-.09.74.74,0,0,1,.11-.06,1.14,1.14,0,0,1,.22-.1,1.78,1.78,0,0,1,.27-.08,1.13,1.13,0,0,1,1.14,0,1.17,1.17,0,0,1,.27.08,1.14,1.14,0,0,1,.22.1l.11.06.1.09L208,118.19Z"></path>
+          </svg>
+          <span class="text-xs">Home</span>
+        </button>
+        <button data-target="image-studio-screen" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
+          <span class="material-symbols-outlined">imagesmode</span>
+          <span class="text-xs">Image Studio</span>
+        </button>
+        <button data-target="chat-screen" id="image-studio-new-chat-nav-btn" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
+          <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128,32a96,96,0,1,0,96,96A96.11,96.11,0,0,0,128,32Zm0,176a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Zm40-88a8,8,0,0,1-8,8H136v24a8,8,0,0,1-16,0V128H96a8,8,0,0,1,0-16h24V88a8,8,0,0,1,16,0v24h24A8,8,0,0,1,168,120Z" fill-rule="evenodd"></path>
+          </svg>
+          <span class="text-xs">New Chat</span>
+        </button>
+        <button data-target="profile-screen" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
+           <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm40-96a40,40,0,1,1-40-40A40,40,0,0,1,168,120Z"></path>
+          </svg>
+          <span class="text-xs">Profile</span>
+        </button>
+      </div>
+      <div class="h-[calc(env(safe-area-inset-bottom)/2)]"></div>
+    </nav>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.sh/@google/genai@^0.7.0" 
+      }
+    }
+  </script>
+  <script type="module" src="index.js"></script>
+</body>
+</html><link rel="stylesheet" href="index.css">
+<script src="index.tsx" type="module"></script>

@@ -120,7 +120,7 @@
             </div>
           </div>
           <div class="absolute bottom-0 left-0 right-0 p-4 text-center">
-            <p class="text-xs text-[#4A5C5A]">Version 1.7.8</p> 
+            <p class="text-xs text-[#4A5C5A]">Version 1.8.3</p> 
           </div>
         </div>
       </div>
@@ -631,7 +631,14 @@
                     <label for="image-studio-prompt-input" class="block text-sm font-medium text-[#A0E1D9] mb-1">Image Prompt</label>
                     <textarea id="image-studio-prompt-input" rows="3" class="form-textarea w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] placeholder:text-[#7A9A94] lg:text-base" placeholder="e.g., A majestic lion in a vibrant jungle, hyperrealistic"></textarea>
                 </div>
-                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4"> 
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end"> 
+                    <div>
+                        <label for="image-studio-engine-select" class="block text-sm font-medium text-[#A0E1D9] mb-1">Image Generation Engine</label>
+                        <select id="image-studio-engine-select" class="form-select w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] lg:text-base">
+                            <option value="standard" selected>Standard (Free - Imagen 3.0)</option>
+                            <option value="imagefx">ImageFX Engine (Premium - Highest Quality)</option>
+                        </select>
+                    </div>
                     <div>
                         <label for="image-studio-aspect-ratio-select" class="block text-sm font-medium text-[#A0E1D9] mb-1">Aspect Ratio</label>
                         <select id="image-studio-aspect-ratio-select" class="form-select w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] lg:text-base">
@@ -642,7 +649,6 @@
                             <option value="3:4">3:4 (Tall)</option>
                         </select>
                     </div>
-                    <!-- Seed input removed -->
                 </div>
                 <button id="image-studio-generate-btn" class="w-full lg:max-w-xs lg:self-start rounded-full bg-[#19e5c6] h-12 text-[#11221f] text-base font-bold hover:bg-opacity-80 transition-colors duration-200 flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined">auto_awesome</span>
@@ -709,6 +715,5 @@
 </script>
   <script type="module" src="index.js"></script>
 </body>
-</html>
-<link rel="stylesheet" href="index.css">
+</html><link rel="stylesheet" href="index.css">
 <script src="index.tsx" type="module"></script>

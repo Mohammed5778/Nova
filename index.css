@@ -32,6 +32,36 @@ body.light-mode {
   display: flex; 
 }
 
+/* Desktop Sidebar Styles */
+#desktop-sidebar .sidebar-nav-item.active {
+  background-color: #19e5c6;
+  color: #0D1A18; /* Dark text on active background */
+}
+#desktop-sidebar .sidebar-nav-item.active .material-symbols-outlined {
+  color: #0D1A18;
+  font-variation-settings: 'FILL' 1;
+}
+body.light-mode #desktop-sidebar {
+  background-color: #e9edf1; /* Light mode sidebar background */
+  border-r-color: #cbd5e0; /* Light mode sidebar border */
+}
+body.light-mode #desktop-sidebar .text-white { color: #1a202c !important; } /* For Nova title in sidebar */
+body.light-mode #desktop-sidebar .sidebar-nav-item {
+  color: #4a5568; /* Default text color for nav items in light mode */
+}
+body.light-mode #desktop-sidebar .sidebar-nav-item:hover {
+  background-color: #dde4eb; /* Lighter hover for light mode */
+  color: #2c7a7b; /* Accent color text on hover */
+}
+body.light-mode #desktop-sidebar .sidebar-nav-item.active {
+  background-color: #2dd4bf; /* Accent color for active item */
+  color: #11221f; /* Darker text for readability on accent bg */
+}
+body.light-mode #desktop-sidebar .sidebar-nav-item.active .material-symbols-outlined {
+  color: #11221f;
+}
+
+
 /* Light mode specific styles for components */
 body.light-mode #splash-screen,
 body.light-mode #onboarding-screen,
@@ -217,6 +247,25 @@ body.light-mode #nova-image-processing-indicator {
     box-sizing: border-box; /* Include padding and border in the element's total width and height */
     overflow-wrap: break-word; /* Ensure long words break to prevent overflow */
 }
+.user-message-content-wrapper {
+    max-width: 80%; /* Default max width for user messages */
+}
+.ai-message-content-wrapper {
+    max-width: 80%; /* Default max width for AI messages */
+}
+@media (min-width: 1024px) { /* lg breakpoint */
+    .user-message-content-wrapper,
+    .ai-message-content-wrapper {
+        max-width: 75%; /* Slightly wider on desktop */
+    }
+}
+@media (min-width: 1280px) { /* xl breakpoint */
+    .user-message-content-wrapper,
+    .ai-message-content-wrapper {
+        max-width: 70%;
+    }
+}
+
 
 .message-text h1, .message-text h2, .message-text h3, .message-text h4, .message-text h5, .message-text h6 {
   font-weight: bold;
@@ -480,6 +529,16 @@ body.light-mode .message-text[dir="rtl"] blockquote {
   margin-left: 16px;
   margin-right: 52px;
 }
+@media (min-width: 1024px) { /* lg breakpoint for desktop */
+    .chat-message-external-sources {
+        margin-left: calc(3rem + 0.75rem); /* avatar (w-12) + gap (gap-3) */
+        max-width: 75%; /* Match message bubble max-width */
+    }
+     .chat-message-external-sources[dir="rtl"] {
+        margin-right: calc(3rem + 0.75rem);
+    }
+}
+
 
 body.light-mode .chat-message-external-sources {
   background-color: #edf2f7; /* Light mode background */
@@ -557,6 +616,12 @@ body.light-mode .chat-message-external-sources .source-domain {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+@media (min-width: 1024px) { /* lg breakpoint for desktop */
+    .process-log-panel {
+        width: 360px; /* Wider on desktop */
+        max-width: 30vw; /* Limit to 30% of viewport width on desktop */
+    }
 }
 .process-log-panel.open {
   right: 0; /* Slide in */
@@ -732,9 +797,14 @@ body.light-mode #image-studio-prompt-input::placeholder {
 }
 
 #image-studio-grid {
-    /* Styles for the 2x2 grid */
-    min-height: 200px; /* Placeholder height, adjust as needed */
+    min-height: 200px;
 }
+@media (min-width: 1024px) { /* lg breakpoint for desktop */
+    #image-studio-grid {
+        min-height: 300px; /* Taller grid area on desktop */
+    }
+}
+
 
 .image-studio-item {
     position: relative;

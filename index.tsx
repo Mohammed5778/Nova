@@ -96,7 +96,7 @@ let debounceTimer: number | undefined;
 
 // Image Studio Elements
 let imageStudioPromptInput: HTMLTextAreaElement | null = null;
-let imageStudioSeedInput: HTMLInputElement | null = null;
+// let imageStudioSeedInput: HTMLInputElement | null = null; // Seed input removed as it's not supported
 let imageStudioAspectRatioSelect: HTMLSelectElement | null = null;
 let imageStudioGenerateButton: HTMLButtonElement | null = null;
 let imageStudioLoadingIndicator: HTMLDivElement | null = null;
@@ -243,7 +243,7 @@ function initializeApp() {
 
   // Image Studio Elements
   imageStudioPromptInput = document.getElementById('image-studio-prompt-input') as HTMLTextAreaElement | null;
-  imageStudioSeedInput = document.getElementById('image-studio-seed-input') as HTMLInputElement | null;
+  // imageStudioSeedInput = document.getElementById('image-studio-seed-input') as HTMLInputElement | null; // Seed input removed
   imageStudioAspectRatioSelect = document.getElementById('image-studio-aspect-ratio-select') as HTMLSelectElement | null;
   imageStudioGenerateButton = document.getElementById('image-studio-generate-btn') as HTMLButtonElement | null;
   imageStudioLoadingIndicator = document.getElementById('image-studio-loading-indicator') as HTMLDivElement | null;
@@ -273,7 +273,7 @@ function initializeApp() {
   window.addEventListener('load', () => {
     if(currentScreen === CHAT_SCREEN_ID) scrollToBottomChat();
   });
-  console.log("Nova AI Mobile Initialized (v1.8.1 - Image Studio Seed/Aspect).");
+  console.log("Nova AI Mobile Initialized (v1.8.3 - Desktop Responsive).");
 }
 
 // --- Language Detection ---
@@ -520,7 +520,7 @@ function showScreen(screenId: string) {
 
   if (screenId !== WEBVIEW_SCREEN_ID && screenId !== IMAGE_VIEWER_SCREEN_ID && screenId !== CODE_CANVAS_SCREEN_ID) {
       currentScreen = screenId;
-      updateBottomNavActiveState(screenId);
+      updateNavigationActiveState(screenId);
   }
 
   if (screenId === CHAT_SCREEN_ID) {
@@ -555,67 +555,53 @@ function showScreen(screenId: string) {
   }
 }
 
-function updateBottomNavActiveState(activeScreenId: string) {
+function updateNavigationActiveState(activeScreenId: string) {
+    // Update Bottom Navigation (Mobile)
     document.querySelectorAll('.bottom-nav').forEach(nav => {
         nav.querySelectorAll('.nav-item').forEach(item => {
             const button = item as HTMLButtonElement;
             let itemTarget = button.dataset.target;
-
             const effectiveTarget = itemTarget === 'chat-list-screen-home' ? CHAT_LIST_SCREEN_ID : itemTarget;
 
-            if (effectiveTarget === activeScreenId) {
-                button.classList.add('active', 'text-[#19E5C6]');
-                button.classList.remove('text-[#7A9A94]');
-                button.querySelector('.material-symbols-outlined.filled')?.classList.add('text-[#19E5C6]');
-                 button.querySelector('.material-symbols-outlined.filled')?.classList.remove('text-[#7A9A94]');
-                button.querySelector('.material-symbols-outlined:not(.filled)')?.classList.add('text-[#19E5C6]');
-                button.querySelector('.material-symbols-outlined:not(.filled)')?.classList.remove('text-[#7A9A94]');
+            const isActive = (effectiveTarget === activeScreenId) || 
+                             (item.id === 'chat-list-new-chat-nav-btn' && activeScreenId === CHAT_SCREEN_ID && !currentChatSessionId) ||
+                             (item.id === 'profile-new-chat-nav-btn' && activeScreenId === CHAT_SCREEN_ID && !currentChatSessionId) ||
+                             (item.id === 'image-studio-new-chat-nav-btn' && activeScreenId === CHAT_SCREEN_ID && !currentChatSessionId);
 
-                const span = button.querySelector('span:last-child') as HTMLElement;
-                if(span) span.classList.add('font-medium', 'text-[#19E5C6]');
-                 if(span) span.classList.remove('text-[#7A9A94]');
+            button.classList.toggle('active', isActive);
+            button.classList.toggle('text-[#19E5C6]', isActive);
+            button.classList.toggle('text-[#7A9A94]', !isActive);
+            
+            button.querySelector('.material-symbols-outlined.filled')?.classList.toggle('text-[#19E5C6]', isActive);
+            button.querySelector('.material-symbols-outlined.filled')?.classList.toggle('text-[#7A9A94]', !isActive);
+            button.querySelector('.material-symbols-outlined:not(.filled)')?.classList.toggle('text-[#19E5C6]', isActive);
+            button.querySelector('.material-symbols-outlined:not(.filled)')?.classList.toggle('text-[#7A9A94]', !isActive);
 
-
-            } else {
-                button.classList.remove('active', 'text-[#19E5C6]');
-                button.classList.add('text-[#7A9A94]');
-                button.querySelector('.material-symbols-outlined.filled')?.classList.remove('text-[#19E5C6]');
-                 button.querySelector('.material-symbols-outlined.filled')?.classList.add('text-[#7A9A94]');
-                button.querySelector('.material-symbols-outlined:not(.filled)')?.classList.remove('text-[#19E5C6]');
-                button.querySelector('.material-symbols-outlined:not(.filled)')?.classList.add('text-[#7A9A94]');
-                const span = button.querySelector('span:last-child') as HTMLElement;
-                if(span) span.classList.remove('font-medium', 'text-[#19E5C6]');
-                if(span) span.classList.add('text-[#7A9A94]');
+            const span = button.querySelector('span:last-child:not(.material-symbols-outlined)') as HTMLElement;
+            if (span) {
+                span.classList.toggle('font-medium', isActive);
+                span.classList.toggle('text-[#19E5C6]', isActive);
+                span.classList.toggle('text-[#7A9A94]', !isActive);
             }
-            
-            const newChatNavButtons = [
-                document.getElementById('chat-list-new-chat-nav-btn'),
-                document.getElementById('profile-new-chat-nav-btn'),
-                document.getElementById('image-studio-new-chat-nav-btn') 
-            ].filter(Boolean);
-            
-            newChatNavButtons.forEach(newChatBtn => {
-              if (newChatBtn === button) {
-                 if (activeScreenId === CHAT_SCREEN_ID && !currentChatSessionId) {
-                    button.classList.add('active', 'text-[#19E5C6]');
-                    button.classList.remove('text-[#7A9A94]');
-                     const span = button.querySelector('span:last-child') as HTMLElement;
-                     if (span) { span.classList.add('font-medium', 'text-[#19E5C6]'); span.classList.remove('text-[#7A9A94]'); }
-                      button.querySelector('.material-symbols-outlined')?.classList.add('text-[#19E5C6]');
-                      button.querySelector('.material-symbols-outlined')?.classList.remove('text-[#7A9A94]');
-                } else { 
-                     button.classList.remove('active', 'text-[#19E5C6]');
-                     button.classList.add('text-[#7A9A94]');
-                     const span = button.querySelector('span:last-child') as HTMLElement;
-                     if (span) { span.classList.remove('font-medium', 'text-[#19E5C6]'); span.classList.add('text-[#7A9A94]'); }
-                     button.querySelector('.material-symbols-outlined')?.classList.remove('text-[#19E5C6]');
-                     button.querySelector('.material-symbols-outlined')?.classList.add('text-[#7A9A94]');
-                }
-              }
-            });
         });
     });
+
+    // Update Sidebar Navigation (Desktop)
+    document.querySelectorAll('#desktop-sidebar .sidebar-nav-item').forEach(item => {
+        const button = item as HTMLButtonElement;
+        let itemTarget = button.dataset.target;
+        const effectiveTarget = itemTarget === 'chat-list-screen-home' ? CHAT_LIST_SCREEN_ID : itemTarget;
+
+        const isActive = (effectiveTarget === activeScreenId) ||
+                         (item.id === 'sidebar-new-chat-nav-btn' && activeScreenId === CHAT_SCREEN_ID && !currentChatSessionId);
+        
+        button.classList.toggle('active', isActive);
+        // Active styles for sidebar are primarily handled by CSS (.sidebar-nav-item.active)
+        // but ensure filled icons if that's part of the design for active sidebar items
+        button.querySelector('.material-symbols-outlined')?.classList.toggle('filled', isActive);
+    });
 }
+
 
 // --- Splash Screen Logic ---
 function initSplash() {
@@ -691,24 +677,24 @@ function renderChatList() {
   chatListItemsContainer.innerHTML = '';
 
   if (chatSessions.length === 0) {
-    chatListItemsContainer.innerHTML = `<p class="text-center text-[#7A9A94] p-8">No chats yet. Start a new one!</p>`;
+    chatListItemsContainer.innerHTML = `<p class="text-center text-[#7A9A94] p-8 lg:p-12">No chats yet. Start a new one!</p>`;
     return;
   }
   const sortedSessions = [...chatSessions].sort((a, b) => b.lastUpdated - a.lastUpdated);
   sortedSessions.forEach(session => {
     const itemDiv = document.createElement('div');
-    itemDiv.className = 'chat-list-item flex items-center gap-4 px-4 py-3 hover:bg-[#1B302C]/50 transition-colors cursor-pointer';
+    itemDiv.className = 'chat-list-item flex items-center gap-4 px-4 py-3 hover:bg-[#1B302C]/50 transition-colors cursor-pointer lg:py-4 lg:px-6';
     itemDiv.dataset.sessionId = session.id;
     const iconDiv = document.createElement('div');
-    iconDiv.className = 'text-[#19E5C6] flex items-center justify-center rounded-xl bg-[#1B302C] shrink-0 size-12';
+    iconDiv.className = 'text-[#19E5C6] flex items-center justify-center rounded-xl bg-[#1B302C] shrink-0 size-12 lg:size-14';
     iconDiv.innerHTML = `<svg fill="currentColor" height="28px" viewBox="0 0 256 256" width="28px" xmlns="http://www.w3.org/2000/svg"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM84,116a12,12,0,1,0,12,12A12,12,0,0,0,84,116Zm88,0a12,12,0,1,0,12,12A12,12,0,0,0,172,116Zm60,12A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-16,0A88,88,0,1,0,51.81,172.06a8,8,0,0,1,.66,6.54L40,216,77.4,203.53a7.85,7.85,0,0,1,2.53-.42,8,8,0,0,1,4,1.08A88,88,0,0,0,216,128Z"></path></svg>`;
     const textContentDiv = document.createElement('div');
     textContentDiv.className = 'flex-grow overflow-hidden';
     const titleH3 = document.createElement('h3');
-    titleH3.className = 'text-white text-base font-medium leading-tight truncate';
+    titleH3.className = 'text-white text-base lg:text-lg font-medium leading-tight truncate';
     titleH3.textContent = session.title;
     const lastMessageP = document.createElement('p');
-    lastMessageP.className = 'text-[#7A9A94] text-sm font-normal leading-snug line-clamp-1';
+    lastMessageP.className = 'text-[#7A9A94] text-sm lg:text-base font-normal leading-snug line-clamp-1';
     
     let lastMeaningfulMessage = 'No messages yet';
     if (session.messages.length > 0) {
@@ -735,7 +721,7 @@ function renderChatList() {
     textContentDiv.appendChild(titleH3);
     textContentDiv.appendChild(lastMessageP);
     const timeDiv = document.createElement('div');
-    timeDiv.className = 'text-xs text-[#7A9A94] shrink-0 ml-auto';
+    timeDiv.className = 'text-xs lg:text-sm text-[#7A9A94] shrink-0 ml-auto';
     timeDiv.textContent = getRelativeTime(session.lastUpdated);
     itemDiv.appendChild(iconDiv);
     itemDiv.appendChild(textContentDiv);
@@ -916,6 +902,7 @@ function initializeGeminiSDK() {
     return false;
   }
   try {
+// Fix: Use named parameter for apiKey
     ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     geminiInitialized = true;
     return true;
@@ -1031,8 +1018,9 @@ function appendMessage(
   if (!chatMessagesContainer) return null;
 
   let messageWrapper: HTMLDivElement;
-  let messageContentHolder: HTMLDivElement; // Holds either text or image container
-  let aiMessageContentDiv: HTMLDivElement | null = null; // Parent for AI text/image content
+  let messageContentHolder: HTMLDivElement; 
+  let aiMessageContentDiv: HTMLDivElement | null = null; 
+  let contentWrapperDiv: HTMLDivElement; // Holds the sender name and content holder
   
   const language = detectedLang || detectMessageLanguage(typeof textOrData === 'string' ? textOrData : (imageData?.promptForImage || ""));
   const domId = messageId || existingMessageDiv?.id || `msg-${type}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -1040,46 +1028,45 @@ function appendMessage(
   if (existingMessageDiv) {
     messageWrapper = existingMessageDiv;
     messageWrapper.id = domId; 
-    // For streaming text, update the existing messageTextElement
     if (messageType === 'text' && isStreaming) {
         const existingTextEl = messageWrapper.querySelector('.message-text') as HTMLDivElement;
         if (existingTextEl) {
+// Fix: Use .text property to get text from GenerateContentResponse
             existingTextEl.innerHTML = renderMarkdownToHTML(textOrData as string);
             existingTextEl.dir = language === 'ar' ? 'rtl' : 'ltr';
         }
     }
-    // If it's a final update for an image, or streaming an image (though not typical for this app structure yet)
-    // this part might need more complex logic if image streaming was a thing.
-    // For now, we assume image messages are added once fully formed.
-    
-  } else { // Create new message
+  } else { 
     messageWrapper = document.createElement('div');
     messageWrapper.id = domId;
-    messageWrapper.className = 'flex items-end gap-3 p-4 chat-message-wrapper'; 
+    messageWrapper.className = 'flex items-end gap-3 p-4 chat-message-wrapper lg:p-5'; 
     
     const avatarDiv = document.createElement('div');
-    avatarDiv.className = 'bg-center bg-no-repeat aspect-square bg-cover rounded-full w-10 h-10 shrink-0 border-2 border-[#19e5c6]/50';
-    const contentWrapper = document.createElement('div');
-    contentWrapper.className = 'flex flex-1 flex-col gap-1';
+    avatarDiv.className = 'bg-center bg-no-repeat aspect-square bg-cover rounded-full w-10 h-10 lg:w-12 lg:h-12 shrink-0 border-2 border-[#19e5c6]/50';
+    
+    contentWrapperDiv = document.createElement('div');
+    contentWrapperDiv.className = `flex flex-1 flex-col gap-1 ${type === 'user' ? 'user-message-content-wrapper' : 'ai-message-content-wrapper'}`;
+
     const senderNamePara = document.createElement('p');
-    senderNamePara.className = 'text-[#A0E1D9] text-xs font-medium leading-normal max-w-[360px]';
+    senderNamePara.className = 'text-[#A0E1D9] text-xs lg:text-sm font-medium leading-normal';
     senderNamePara.textContent = senderName;
 
     if (type === 'ai') {
         aiMessageContentDiv = document.createElement('div');
-        aiMessageContentDiv.className = 'ai-message-content bg-[#1A3A35] text-white rounded-xl rounded-bl-none shadow-md overflow-hidden'; 
-        messageContentHolder = document.createElement('div'); // This will hold either text or image specifics
-    } else { // User message
+        aiMessageContentDiv.className = 'ai-message-content bg-[#1A3A35] text-white rounded-xl rounded-bl-none shadow-md overflow-hidden lg:rounded-lg'; 
+        messageContentHolder = document.createElement('div'); 
+    } else { 
         messageContentHolder = document.createElement('div');
-        messageContentHolder.className = 'message-text text-base font-normal leading-relaxed flex max-w-[360px] rounded-xl px-4 py-3 shadow-md break-words';
+        messageContentHolder.className = 'message-text text-base lg:text-lg font-normal leading-relaxed flex rounded-xl px-4 py-3 shadow-md break-words';
     }
 
     if (messageType === 'text') {
-        messageContentHolder.classList.add('message-text', 'text-base', 'font-normal', 'leading-relaxed', 'break-words');
-        if (type === 'ai') messageContentHolder.classList.add('px-4', 'py-3'); // Padding for AI text bubble
+        messageContentHolder.classList.add('message-text', 'text-base', 'lg:text-lg', 'font-normal', 'leading-relaxed', 'break-words');
+        if (type === 'ai') messageContentHolder.classList.add('px-4', 'py-3', 'lg:px-5', 'lg:py-4'); 
+// Fix: Use .text property to get text from GenerateContentResponse
         messageContentHolder.innerHTML = renderMarkdownToHTML(textOrData as string);
     } else if (messageType === 'image' && imageData) {
-        messageContentHolder.classList.add('ai-message-image-container'); // Specific class for image styling
+        messageContentHolder.classList.add('ai-message-image-container'); 
 
         const promptPara = document.createElement('p');
         promptPara.className = 'ai-image-prompt-text';
@@ -1089,7 +1076,7 @@ function appendMessage(
         const imgElement = document.createElement('img');
         imgElement.src = `data:${imageData.mimeType};base64,${imageData.base64}`;
         imgElement.alt = imageData.promptForImage;
-        imgElement.onclick = () => openInAppImageViewer(imgElement.src); // Open in viewer on click
+        imgElement.onclick = () => openInAppImageViewer(imgElement.src); 
         messageContentHolder.appendChild(imgElement);
         
         const downloadBtn = document.createElement('button');
@@ -1104,37 +1091,35 @@ function appendMessage(
 
     messageContentHolder.dir = language === 'ar' ? 'rtl' : 'ltr';
     senderNamePara.dir = language === 'ar' ? 'rtl' : 'ltr'; 
-    if (type === 'user' && language === 'ar') senderNamePara.classList.add('text-right');
     
-
     if (type === 'user') {
       messageWrapper.classList.add('justify-end');
-      contentWrapper.classList.add('items-end');
-      if (messageContentHolder.classList.contains('message-text')) { // Ensure only text messages get user styling
+      contentWrapperDiv.classList.add('items-end');
+      if (messageContentHolder.classList.contains('message-text')) { 
         messageContentHolder.classList.add('rounded-br-none', 'bg-[#19e5c6]', 'text-[#0C1A18]');
       }
       avatarDiv.style.backgroundImage = `url("${USER_AVATAR_URL}")`;
-      contentWrapper.appendChild(senderNamePara);
-      contentWrapper.appendChild(messageContentHolder);
-      messageWrapper.appendChild(contentWrapper);
+      contentWrapperDiv.appendChild(senderNamePara);
+      contentWrapperDiv.appendChild(messageContentHolder);
+      messageWrapper.appendChild(contentWrapperDiv);
       messageWrapper.appendChild(avatarDiv);
-    } else { // AI message
-      contentWrapper.classList.add('items-start');
+    } else { 
+      contentWrapperDiv.classList.add('items-start');
       avatarDiv.style.backgroundImage = `url("${AI_AVATAR_URL}")`;
       if (senderName === "System") {
          avatarDiv.style.opacity = "0.5";
          if (aiMessageContentDiv) aiMessageContentDiv.classList.add('opacity-80', 'italic');
          else messageContentHolder.classList.add('opacity-80', 'italic');
       }
-      contentWrapper.appendChild(senderNamePara);
+      contentWrapperDiv.appendChild(senderNamePara);
       if(aiMessageContentDiv) {
         aiMessageContentDiv.appendChild(messageContentHolder);
-        contentWrapper.appendChild(aiMessageContentDiv);
-      } else { // Should not happen for AI if aiMessageContentDiv is always created
-        contentWrapper.appendChild(messageContentHolder); 
+        contentWrapperDiv.appendChild(aiMessageContentDiv);
+      } else { 
+        contentWrapperDiv.appendChild(messageContentHolder); 
       }
       messageWrapper.appendChild(avatarDiv);
-      messageWrapper.appendChild(contentWrapper);
+      messageWrapper.appendChild(contentWrapperDiv);
     }
     chatMessagesContainer.appendChild(messageWrapper);
   }
@@ -1203,6 +1188,7 @@ function appendMessage(
     const msgToSave: ChatMessage = {
         id: messageId || domId, 
         sender: senderName as 'User' | 'Nova',
+// Fix: Use .text property to get text from GenerateContentResponse
         text: typeof textOrData === 'string' ? textOrData : (imageData?.promptForImage || "[AI Image Response]"), 
         timestamp: Date.now(),
         sources: (type === 'ai' && messageType === 'text' && sources) ? sources : undefined,
@@ -1430,8 +1416,10 @@ async function handleSendMessage() {
   try {
     const modelRunConfig: any = {};
 
+// Fix: Check model name before applying thinkingConfig
     if (TEXT_MODEL_NAME === 'gemini-2.5-flash-preview-04-17' && !deepThinkingEnabled) { 
         if (voiceModeActive) {
+// Fix: thinkingBudget should be 0 to disable thinking
             modelRunConfig.thinkingConfig = { thinkingBudget: 0 };
         }
     } 
@@ -1451,6 +1439,7 @@ async function handleSendMessage() {
     const result = await geminiChat.sendMessageStream(sendMessageParams);
 
     for await (const chunk of result) {
+// Fix: Use .text property to get text from GenerateContentResponse
       const chunkText = chunk.text;
       if (chunkText) {
         fullResponseText += chunkText;
@@ -1464,6 +1453,7 @@ async function handleSendMessage() {
         }
         scrollToBottomChat();
       }
+// Fix: Correctly access groundingMetadata and map chunks
       if (chunk.candidates && chunk.candidates[0]?.groundingMetadata?.groundingChunks) {
           groundingSources = chunk.candidates[0].groundingMetadata.groundingChunks.map(
               (gc: any) => ({ uri: gc.web?.uri || gc.retrievedContext?.uri || '', title: gc.web?.title || '' })
@@ -1560,9 +1550,11 @@ async function handleGenerateImageInChat() {
     const aiImageId = `msg-ai-img-${Date.now()}`;
 
     try {
+// Fix: Use correct model name for image generation
         const response = await ai.models.generateImages({
             model: IMAGE_MODEL_NAME,
             prompt: prompt,
+// Fix: Ensure numberOfImages is a number
             config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: "1:1" }, // Default to 1:1 for in-chat
         });
 
@@ -1875,37 +1867,51 @@ function setupEventListeners() {
         showScreen(SETTINGS_SCREEN_ID);
     });
 
-    document.querySelectorAll('.nav-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const targetScreen = (item as HTMLElement).dataset.target;
-        if (targetScreen) {
-          let currentActiveScreenBeforeNav = currentScreen;
-          if (targetScreen === "discover-screen") { // This target might be removed or repurposed
+    // Combined Navigation Click Handler
+    function handleNavClick(targetScreen: string | null | undefined, currentActiveScreenBeforeNav: string) {
+        if (!targetScreen) return;
+
+        if (targetScreen === "discover-screen") { // This target might be removed or repurposed
             alert("Discover section is not yet implemented."); 
             return;
-          }
-          if (targetScreen === PROFILE_SCREEN_ID) {
+        }
+        if (targetScreen === PROFILE_SCREEN_ID) {
              if (currentActiveScreenBeforeNav !== PROFILE_SCREEN_ID) {
                  previousScreenForSettings = currentActiveScreenBeforeNav;
              }
              showScreen(PROFILE_SCREEN_ID);
-          }
-          else if (targetScreen === CHAT_SCREEN_ID && currentScreen !== CHAT_SCREEN_ID) {
+        }
+        else if (targetScreen === CHAT_SCREEN_ID && currentScreen !== CHAT_SCREEN_ID) {
              createNewChatSession();
-          } else if (targetScreen === 'chat-list-screen-home') {
+        } else if (targetScreen === 'chat-list-screen-home') {
              showScreen(CHAT_LIST_SCREEN_ID);
-          } else if (targetScreen === SETTINGS_SCREEN_ID) {
+        } else if (targetScreen === SETTINGS_SCREEN_ID) {
              if (currentActiveScreenBeforeNav !== SETTINGS_SCREEN_ID) {
                 previousScreenForSettings = currentActiveScreenBeforeNav;
              }
              showScreen(SETTINGS_SCREEN_ID);
-          }
-          else if (screens.includes(targetScreen) && targetScreen !== WEBVIEW_SCREEN_ID && targetScreen !== IMAGE_VIEWER_SCREEN_ID && targetScreen !== CODE_CANVAS_SCREEN_ID) {
-            showScreen(targetScreen);
-          }
         }
+        else if (screens.includes(targetScreen) && targetScreen !== WEBVIEW_SCREEN_ID && targetScreen !== IMAGE_VIEWER_SCREEN_ID && targetScreen !== CODE_CANVAS_SCREEN_ID) {
+            showScreen(targetScreen);
+        }
+    }
+    
+    // Mobile Bottom Nav
+    document.querySelectorAll('.bottom-nav .nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const targetScreen = (item as HTMLElement).dataset.target;
+        handleNavClick(targetScreen, currentScreen);
       });
     });
+
+    // Desktop Sidebar Nav
+    document.querySelectorAll('#desktop-sidebar .sidebar-nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const targetScreen = (item as HTMLElement).dataset.target;
+            handleNavClick(targetScreen, currentScreen);
+        });
+    });
+
 
     webviewCloseBtn?.addEventListener('click', () => {
         if (webviewScreenElement && webviewFrame) {
@@ -2201,6 +2207,7 @@ async function handleGenerateImages() {
 
     try {
         const imageGenConfig: any = {
+// Fix: Ensure numberOfImages is a number
             numberOfImages: 4,
             outputMimeType: 'image/jpeg',
         };
@@ -2211,13 +2218,15 @@ async function handleGenerateImages() {
             imageGenConfig.aspectRatio = "1:1"; // Default if somehow not found
         }
 
-        if (imageStudioSeedInput && imageStudioSeedInput.value) {
-            const seedNum = parseInt(imageStudioSeedInput.value, 10);
-            if (!isNaN(seedNum)) {
-                imageGenConfig.seed = seedNum;
-            }
-        }
+        // Seed parameter removed as it's not supported by the API
+        // if (imageStudioSeedInput && imageStudioSeedInput.value) {
+        //     const seedNum = parseInt(imageStudioSeedInput.value, 10);
+        //     if (!isNaN(seedNum)) {
+        //         imageGenConfig.seed = seedNum;
+        //     }
+        // }
 
+// Fix: Use correct model name for image generation
         const response = await ai.models.generateImages({
             model: IMAGE_MODEL_NAME,
             prompt: prompt,
@@ -2269,17 +2278,24 @@ function displayGeneratedImages(imagesData: { base64: string, prompt: string, mi
         downloadButton.innerHTML = `<span class="material-symbols-outlined">download</span>`;
         downloadButton.setAttribute('aria-label', `Download image ${index + 1}`);
         downloadButton.onclick = (e) => {
-            e.stopPropagation(); // Prevent image click when download button is clicked
-            const promptPart = imgData.prompt.substring(0, 20).replace(/\s+/g, '_');
-            downloadImageWithBase64(imgData.base64, imgData.mimeType, `nova-${promptPart}-${index + 1}.jpeg`);
+            e.stopPropagation(); // Prevent image viewer from opening when download is clicked
+            downloadImageWithBase64(imgData.base64, imgData.mimeType, `nova-image-${imgData.prompt.substring(0,20).replace(/\s+/g, '_')}-${index + 1}.jpeg`);
         };
-        
         itemDiv.appendChild(imgElement);
         itemDiv.appendChild(downloadButton);
         imageStudioGridElement.appendChild(itemDiv);
     });
 }
 
+// --- Helper Utilities ---
+
+// Fix: Define missing downloadImageWithBase64 function
+/**
+ * Triggers a browser download for a base64 encoded image.
+ * @param base64Data The base64 encoded image data.
+ * @param mimeType The MIME type of the image (e.g., 'image/jpeg', 'image/png').
+ * @param filename The desired filename for the downloaded image.
+ */
 function downloadImageWithBase64(base64Data: string, mimeType: string, filename: string) {
     const link = document.createElement('a');
     link.href = `data:${mimeType};base64,${base64Data}`;

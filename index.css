@@ -28,7 +28,9 @@ body.light-mode {
 #webview-screen.active, 
 #image-viewer-screen.active,
 #code-canvas-screen.active,
-#image-studio-screen.active { /* Ensure overlay/tool screens also use flex */
+#image-studio-screen.active,
+#create-tool-screen.active,
+#memories-screen.active { /* Ensure overlay/tool screens also use flex */
   display: flex; 
 }
 
@@ -69,7 +71,9 @@ body.light-mode #signin-screen,
 body.light-mode #settings-screen,
 body.light-mode #profile-screen,
 body.light-mode #code-canvas-screen,
-body.light-mode #image-studio-screen { 
+body.light-mode #image-studio-screen,
+body.light-mode #create-tool-screen,
+body.light-mode #memories-screen { 
   background-color: #e9edf1; 
 }
 body.light-mode #chat-list-screen,
@@ -185,31 +189,37 @@ body.light-mode #voice-mode-toggle:not(.active) svg {
   color: #a0aec0; 
 }
 
-#code-canvas-button, #generate-image-chat-button { 
+#code-canvas-button, #generate-image-chat-button, #upload-file-button { 
     transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, opacity 0.2s ease-in-out;
 }
 body.light-mode #code-canvas-button, 
-body.light-mode #generate-image-chat-button {
+body.light-mode #generate-image-chat-button,
+body.light-mode #upload-file-button {
     background-color: #e2e8f0 !important; 
     color: #4a5568 !important; 
 }
 body.light-mode #code-canvas-button:hover,
-body.light-mode #generate-image-chat-button:hover {
+body.light-mode #generate-image-chat-button:hover,
+body.light-mode #upload-file-button:hover {
     background-color: #cbd5e0 !important;
 }
 body.light-mode #code-canvas-button span,
-body.light-mode #generate-image-chat-button span { 
+body.light-mode #generate-image-chat-button span,
+body.light-mode #upload-file-button span { 
   color: #4a5568 !important;
 }
 body.light-mode #code-canvas-button:hover span,
-body.light-mode #generate-image-chat-button:hover span {
+body.light-mode #generate-image-chat-button:hover span,
+body.light-mode #upload-file-button:hover span {
   color: #2c7a7b !important;
 }
 #code-canvas-button:hover .material-symbols-outlined,
-#generate-image-chat-button:hover .material-symbols-outlined {
+#generate-image-chat-button:hover .material-symbols-outlined,
+#upload-file-button:hover .material-symbols-outlined {
   color: #19e5c6;
 }
-#generate-image-chat-button.opacity-50 {
+#generate-image-chat-button.opacity-50,
+#upload-file-button.opacity-50 {
   opacity: 0.5;
 }
 
@@ -243,20 +253,22 @@ body.light-mode #nova-image-processing-indicator {
 
 /* Styles for Markdown Content in Chat Messages */
 .message-text {
-    width: 100%; /* Ensure message text takes full width of its container */
-    box-sizing: border-box; /* Include padding and border in the element's total width and height */
-    overflow-wrap: break-word; /* Ensure long words break to prevent overflow */
+    width: 100%; 
+    box-sizing: border-box; 
+    overflow-wrap: break-word; 
 }
 .user-message-content-wrapper {
-    max-width: 80%; /* Default max width for user messages */
+    max-width: 80%; 
 }
 .ai-message-content-wrapper {
-    max-width: 80%; /* Default max width for AI messages */
+    max-width: 80%;
+    display: flex; /* Added to ensure actions container is part of the flow */
+    flex-direction: column; /* Stack content and actions */
 }
 @media (min-width: 1024px) { /* lg breakpoint */
     .user-message-content-wrapper,
     .ai-message-content-wrapper {
-        max-width: 75%; /* Slightly wider on desktop */
+        max-width: 75%; 
     }
 }
 @media (min-width: 1280px) { /* xl breakpoint */
@@ -313,9 +325,9 @@ body.light-mode .message-text blockquote {
 .code-block-wrapper {
   position: relative;
   margin-bottom: 0.75em;
-  width: 100%; /* Ensure wrapper takes full width */
+  width: 100%; 
   max-width: 100%; 
-  box-sizing: border-box; /* Include padding and border in width calculation */
+  box-sizing: border-box; 
 }
 
 .ai-message-content {
@@ -326,7 +338,7 @@ body.light-mode .message-text blockquote {
   background-color: #0c1a18; 
   border: 1px solid #244742;
   padding: 0.75em;
-  padding-top: 3em; /* Increased top padding for toolbar */
+  padding-top: 3em; 
   border-radius: 0.5em;
   overflow-x: auto; 
   max-width: 100%; 
@@ -346,28 +358,28 @@ body.light-mode .message-text pre {
   position: absolute;
   top: 0px;
   right: 0px;
-  padding: 4px 6px; /* Adjust padding as needed */
+  padding: 4px 6px; 
   display: flex;
-  gap: 6px; /* Space between buttons */
+  gap: 6px; 
   z-index: 1;
-  background: rgba(12, 26, 24, 0.7); /* Darker, slightly transparent background */
-  border-bottom-left-radius: 6px; /* Rounded corner for aesthetics */
-  border-top-right-radius: 0.4em; /* Match pre's top-right radius */
+  background: rgba(12, 26, 24, 0.7); 
+  border-bottom-left-radius: 6px; 
+  border-top-right-radius: 0.4em; 
 }
 
 body.light-mode .code-block-toolbar {
-    background: rgba(226, 232, 240, 0.7); /* Light mode background */
+    background: rgba(226, 232, 240, 0.7); 
 }
 
 
 .preview-code-btn, .copy-code-btn {
   background-color: transparent; 
-  color: #A0E1D9; /* Lighter color for better contrast on toolbar bg */
+  color: #A0E1D9; 
   border: 1px solid #244742;
   padding: 2px 6px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.65rem; /* Smaller font size for toolbar buttons */
+  font-size: 0.65rem; 
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -398,12 +410,12 @@ body.light-mode .code-block-toolbar {
 
 body.light-mode .preview-code-btn,
 body.light-mode .copy-code-btn {
-  color: #38a169; /* Darker green for light mode */
+  color: #38a169; 
   border-color: #a0aec0;
 }
 body.light-mode .preview-code-btn:hover,
 body.light-mode .copy-code-btn:hover {
-  background-color: #2c7a7b; /* Dark teal for hover in light mode */
+  background-color: #2c7a7b; 
   color: #f0f4f8;
   border-color: #2c7a7b;
 }
@@ -466,16 +478,19 @@ body.light-mode .message-text tr:nth-child(even) {
 }
 
 .message-text a.webview-link,
-#settings-screen a { /* General style for links in settings */
+#settings-screen a,
+#memories-screen a { /* General style for links */
   color: #19e5c6;
-  text-decoration: none; /* Keep it clean */
+  text-decoration: none; 
 }
 .message-text a.webview-link:hover,
-#settings-screen a:hover {
+#settings-screen a:hover,
+#memories-screen a:hover {
   text-decoration: underline;
 }
 body.light-mode .message-text a.webview-link,
-body.light-mode #settings-screen a {
+body.light-mode #settings-screen a,
+body.light-mode #memories-screen a {
     color: #2c7a7b;
 }
 
@@ -514,15 +529,15 @@ body.light-mode .message-text[dir="rtl"] blockquote {
 
 /* External Sources Container Styling */
 .chat-message-external-sources {
-  margin-top: 8px; /* Space between message bubble and sources box */
-  margin-bottom: 16px; /* Space after sources box */
-  padding: 12px; /* p-3 */
-  background-color: #11201d; /* Slightly different from AI bubble for distinction */
+  margin-top: 8px; 
+  margin-bottom: 16px; 
+  padding: 12px; 
+  background-color: #11201d; 
   border: 1px solid #244742;
-  border-radius: 0.5rem; /* rounded-lg */
-  margin-left: 52px; /* Align with AI message content (avatar width + gap) */
-  margin-right: 16px; /* Standard p-4 right margin */
-  max-width: calc(100% - 52px - 16px); /* Ensure it doesn't overflow */
+  border-radius: 0.5rem; 
+  margin-left: 52px; 
+  margin-right: 16px; 
+  max-width: calc(100% - 52px - 16px); 
   box-sizing: border-box;
 }
 .chat-message-external-sources[dir="rtl"] {
@@ -531,8 +546,8 @@ body.light-mode .message-text[dir="rtl"] blockquote {
 }
 @media (min-width: 1024px) { /* lg breakpoint for desktop */
     .chat-message-external-sources {
-        margin-left: calc(3rem + 0.75rem); /* avatar (w-12) + gap (gap-3) */
-        max-width: 75%; /* Match message bubble max-width */
+        margin-left: calc(3rem + 0.75rem); 
+        max-width: 75%; 
     }
      .chat-message-external-sources[dir="rtl"] {
         margin-right: calc(3rem + 0.75rem);
@@ -541,13 +556,13 @@ body.light-mode .message-text[dir="rtl"] blockquote {
 
 
 body.light-mode .chat-message-external-sources {
-  background-color: #edf2f7; /* Light mode background */
-  border-color: #cbd5e0; /* Light mode border */
+  background-color: #edf2f7; 
+  border-color: #cbd5e0; 
 }
 
 .chat-message-external-sources h4 {
-  font-size: 0.875rem; /* text-sm */
-  font-weight: 600; /* font-semibold */
+  font-size: 0.875rem; 
+  font-weight: 600; 
   color: #A0E1D9;
   margin-bottom: 8px;
 }
@@ -577,7 +592,7 @@ body.light-mode .chat-message-external-sources h4 {
 .chat-message-external-sources li a {
   color: #19e5c6;
   text-decoration: none;
-  word-break: break-all; /* Break long URLs */
+  word-break: break-all; 
 }
 .chat-message-external-sources li a:hover {
   text-decoration: underline;
@@ -604,33 +619,24 @@ body.light-mode .chat-message-external-sources .source-domain {
 .process-log-panel {
   position: fixed;
   top: 0;
-  right: -100%; /* Initially off-screen */
-  width: 300px; /* Adjust width as needed, max 80vw */
+  right: -100%; 
+  width: 300px; 
   max-width: 80vw;
   height: 100dvh;
-  background-color: #0C1A18; /* Dark background */
+  background-color: #0C1A18; 
   border-left: 1px solid #244742;
   box-shadow: -5px 0 15px rgba(0,0,0,0.3);
-  z-index: 1000; /* High z-index to be on top */
-  transition: right 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* Smooth slide */
+  z-index: 1000; 
+  transition: right 0.4s cubic-bezier(0.2, 0, 0.05, 1) !important;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-}
-@media (min-width: 1024px) { /* lg breakpoint for desktop */
-    .process-log-panel {
-        width: 360px; /* Wider on desktop */
-        max-width: 30vw; /* Limit to 30% of viewport width on desktop */
-    }
 }
 .process-log-panel.open {
-  right: 0; /* Slide in */
+  right: 0;
 }
-
 body.light-mode .process-log-panel {
-  background-color: #f0f4f8;
-  border-left-color: #cbd5e0;
-  box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+    background-color: #e9edf1;
+    border-left-color: #cbd5e0;
 }
 
 .process-log-header {
@@ -642,16 +648,16 @@ body.light-mode .process-log-panel {
   flex-shrink: 0;
 }
 body.light-mode .process-log-header {
-  border-bottom-color: #e2e8f0;
+    border-bottom-color: #cbd5e0;
 }
 
 .process-log-title {
-  font-size: 1rem;
-  font-weight: 600;
   color: #e0e0e0;
+  font-weight: 600;
+  font-size: 1rem;
 }
 body.light-mode .process-log-title {
-  color: #2d3748;
+    color: #1a202c;
 }
 
 #process-log-close-btn {
@@ -660,304 +666,327 @@ body.light-mode .process-log-title {
   color: #A0E1D9;
   cursor: pointer;
   padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
 }
 #process-log-close-btn:hover {
   color: #19e5c6;
-}
-#process-log-close-btn .material-symbols-outlined {
-  font-size: 24px;
+  background-color: rgba(25, 229, 198, 0.1);
 }
 body.light-mode #process-log-close-btn {
-  color: #718096;
+    color: #718096;
 }
 body.light-mode #process-log-close-btn:hover {
-  color: #2c7a7b;
+    color: #2c7a7b;
+    background-color: rgba(44, 122, 123, 0.1);
 }
 
 #process-log-list {
   list-style: none;
-  padding: 12px 16px;
+  padding: 16px;
   margin: 0;
   overflow-y: auto;
   flex-grow: 1;
+  font-size: 0.8rem;
+  color: #C2E0DB;
+  scrollbar-width: thin;
+  scrollbar-color: #244742 #0C1A18;
+}
+#process-log-list::-webkit-scrollbar {
+  width: 6px;
+}
+#process-log-list::-webkit-scrollbar-track {
+  background: #0C1A18;
+}
+#process-log-list::-webkit-scrollbar-thumb {
+  background-color: #244742;
+  border-radius: 3px;
+}
+body.light-mode #process-log-list {
+    color: #4a5568;
+    scrollbar-color: #a0aec0 #e9edf1;
+}
+body.light-mode #process-log-list::-webkit-scrollbar-track {
+    background: #e9edf1;
+}
+body.light-mode #process-log-list::-webkit-scrollbar-thumb {
+    background-color: #a0aec0;
 }
 
 #process-log-list li {
-  font-size: 0.8rem; 
-  color: #a0e1d9; 
-  padding: 6px 0; 
-  border-bottom: 1px dashed #244742; 
-  line-height: 1.4;
-}
-body.light-mode #process-log-list li {
-    color: #4a5568; /* Darker text for light mode */
-    border-bottom-color: #e2e8f0;
+  padding: 4px 0;
+  border-bottom: 1px dashed #1a322f;
+  line-height: 1.5;
 }
 #process-log-list li:last-child {
   border-bottom: none;
 }
+body.light-mode #process-log-list li {
+    border-bottom-color: #d1d5db;
+}
 #process-log-list li.source-entry a {
-  color: #19e5c6; 
-  text-decoration: underline;
-  word-break: break-all;
+    color: #19e5c6;
+    font-style: italic;
 }
 body.light-mode #process-log-list li.source-entry a {
     color: #2c7a7b;
 }
 
-#toggle-process-log-btn.active svg {
-    color: #19e5c6; /* Active state for the toggle button in chat header */
-}
-body.light-mode #toggle-process-log-btn.active svg {
-    color: #2c7a7b;
-}
-
-
-/* Code Canvas Screen Specific Styles */
-body.light-mode #code-canvas-screen header, 
-body.light-mode #code-canvas-screen footer {
-    background-color: #e2e8f0 !important; 
-}
-body.light-mode #code-canvas-textarea {
-    background-color: #f7fafc !important; 
-    color: #2d3748 !important; 
-    border-color: #cbd5e0 !important;
-}
-body.light-mode #code-canvas-textarea::placeholder {
-    color: #a0aec0 !important;
-}
-body.light-mode #code-canvas-textarea:focus {
-    border-color: #2c7a7b !important;
-    box-shadow: 0 0 0 2px rgba(44, 122, 123, 0.3) !important;
-}
-
-#code-canvas-inline-preview-iframe {
-    background-color: white; 
-    border: 1px solid #244742;
-}
-body.light-mode #code-canvas-inline-preview-iframe {
-    border-color: #a0aec0 !important;
-}
-
-/* Code Canvas Footer Buttons */
-body.light-mode #code-canvas-toggle-view-btn {
-    background-color: #2dd4bf !important; 
-    color: #1a202c !important; 
-}
-body.light-mode #code-canvas-toggle-view-btn:hover {
-    background-color: #27bba5 !important; 
-}
-
-body.light-mode #code-canvas-enter-fullscreen-btn {
-    color: #4a5568 !important; 
-}
-body.light-mode #code-canvas-enter-fullscreen-btn:hover {
-    color: #2c7a7b !important; 
-    background-color: rgba(45, 212, 191, 0.1) !important;
-}
-body.light-mode #code-canvas-enter-fullscreen-btn.hidden {
-    display: none !important;
-}
-
-
-body.light-mode #code-canvas-copy-to-chat-btn {
-    background-color: #e2e8f0 !important; 
-    color: #2c7a7b !important; 
-}
-body.light-mode #code-canvas-copy-to-chat-btn:hover {
-    background-color: #cbd5e0 !important; 
-}
-
-/* Full Screen Preview Overlay */
-body.light-mode #full-screen-preview-overlay #full-screen-preview-close-btn {
-    color: #1a202c; 
-    background-color: rgba(200,200,210, 0.3);
-}
-body.light-mode #full-screen-preview-overlay #full-screen-preview-close-btn:hover {
-    background-color: rgba(180,180,190, 0.5);
-}
-
-body.light-mode #full-screen-preview-iframe {
-    border-color: #a0aec0 !important; 
-}
-
-/* Image Studio Screen Styles */
-#image-studio-screen header {
-    border-bottom: 1px solid #19e5c620;
-}
-body.light-mode #image-studio-screen header {
-    border-bottom-color: rgba(45, 212, 191, 0.3) !important;
-}
-
-#image-studio-prompt-input {
-    resize: none; /* Prevent manual resizing of textarea */
-}
-body.light-mode #image-studio-prompt-input::placeholder {
-    color: #a0aec0 !important;
-}
-
-#image-studio-grid {
-    min-height: 200px;
-}
-@media (min-width: 1024px) { /* lg breakpoint for desktop */
-    #image-studio-grid {
-        min-height: 300px; /* Taller grid area on desktop */
-    }
-}
-
-
-.image-studio-item {
-    position: relative;
-    aspect-ratio: 1 / 1; /* Maintain square aspect ratio */
-    background-color: #1A3A35; /* Placeholder background */
-    border-radius: 0.5rem; /* rounded-lg */
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #244742;
-}
-body.light-mode .image-studio-item {
-    background-color: #d1fae5 !important;
-    border-color: #a0aec0 !important;
-}
-
-.image-studio-item img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover; /* Cover the area, might crop */
-    cursor: zoom-in; /* Indicate clickable for preview */
-}
-
-.image-studio-item .download-btn-overlay {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    background-color: rgba(12, 26, 24, 0.6); /* Semi-transparent dark */
-    color: #19e5c6;
-    border: none;
-    border-radius: 9999px; /* rounded-full */
-    padding: 6px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.2s;
-    opacity: 0; /* Hidden by default */
-    transform: translateY(10px); /* Start slightly off screen */
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.image-studio-item:hover .download-btn-overlay {
-    opacity: 1;
-    transform: translateY(0);
-}
-.image-studio-item .download-btn-overlay:hover {
-    background-color: rgba(25, 229, 198, 0.8); /* Brighter on hover */
-    color: #0C1A18;
-}
-.image-studio-item .download-btn-overlay .material-symbols-outlined {
-    font-size: 20px;
-}
-
-body.light-mode .image-studio-item .download-btn-overlay {
-    background-color: rgba(226, 232, 240, 0.6) !important;
-    color: #2c7a7b !important;
-}
-body.light-mode .image-studio-item .download-btn-overlay:hover {
-    background-color: rgba(45, 212, 191, 0.8) !important;
-    color: #f0f4f8 !important;
-}
-
-#image-studio-generate-btn:disabled,
-#image-studio-download-all-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-body.light-mode #image-studio-generate-btn {
-    background-color: #2dd4bf !important;
-    color: #1a202c !important;
-}
-body.light-mode #image-studio-generate-btn:hover {
-    background-color: #27bba5 !important;
-}
-body.light-mode #image-studio-download-all-btn {
-    background-color: #e2e8f0 !important;
-    color: #2c7a7b !important;
-}
-body.light-mode #image-studio-download-all-btn:hover {
-    background-color: #cbd5e0 !important;
-}
-
-#image-studio-loading-indicator .animate-spin {
-    color: #19e5c6;
-}
-body.light-mode #image-studio-loading-indicator .animate-spin {
-    color: #2c7a7b !important;
-}
-body.light-mode #image-studio-loading-indicator,
-body.light-mode #image-studio-error-message {
-    color: #2f855a !important;
-}
-body.light-mode #image-studio-error-message {
-    color: #c53030 !important; /* Red for errors in light mode */
-}
-
-/* Styles for in-chat generated images */
+/* Chat message content image (AI Generated) */
 .ai-message-image-container {
-    padding: 8px; /* Add some padding around the image and its elements */
+    padding: 0.75rem; /* Match text padding */
     display: flex;
     flex-direction: column;
-    align-items: flex-start; /* Align items to the start for AI messages */
+    gap: 0.5rem;
 }
 .ai-message-image-container img {
-    max-width: 100%; /* Responsive image */
-    max-height: 300px; /* Max height to prevent overly large images */
-    border-radius: 0.5rem; /* rounded-lg */
-    margin-bottom: 8px; /* Space between image and prompt/button */
-    border: 1px solid #244742; /* Subtle border */
-    background-color: #11201d; /* Dark bg for image loading */
-    cursor: zoom-in; /* Indicate clickable for preview */
+    max-width: 100%;
+    border-radius: 0.5rem; /* Consistent rounding */
+    cursor: pointer;
+    border: 1px solid #244742;
 }
 body.light-mode .ai-message-image-container img {
     border-color: #cbd5e0;
-    background-color: #edf2f7;
 }
-
 .ai-image-prompt-text {
-    font-size: 0.75rem; /* text-xs */
+    font-size: 0.8rem;
     color: #A0E1D9;
+    margin-bottom: 0.25rem;
     font-style: italic;
-    margin-bottom: 8px;
-    word-break: break-word;
 }
 body.light-mode .ai-image-prompt-text {
     color: #2f855a;
 }
-
-.download-in-chat-image-btn {
-    background-color: #19e5c6;
-    color: #0C1A18;
-    border: none;
-    padding: 6px 12px;
+.download-in-chat-image-btn { /* This can be merged with message-action-btn if desired */
+    background-color: rgba(25, 229, 198, 0.1);
+    color: #19e5c6;
+    border: 1px solid #19e5c6;
+    padding: 0.3rem 0.6rem;
+    border-radius: 0.3rem;
     font-size: 0.75rem;
-    font-weight: 500;
-    border-radius: 9999px; /* rounded-full */
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    transition: background-color 0.2s;
-}
-.download-in-chat-image-btn:hover {
-    background-color: #15c4a9;
+    gap: 0.25rem;
+    align-self: flex-start;
+    transition: background-color 0.2s, color 0.2s;
 }
 .download-in-chat-image-btn .material-symbols-outlined {
-    font-size: 1rem;
+    font-size: 0.9rem;
+}
+.download-in-chat-image-btn:hover {
+    background-color: #19e5c6;
+    color: #0C1A18;
 }
 body.light-mode .download-in-chat-image-btn {
-    background-color: #2dd4bf;
-    color: #1a202c;
+    background-color: rgba(44, 122, 123, 0.1);
+    color: #2c7a7b;
+    border-color: #2c7a7b;
 }
 body.light-mode .download-in-chat-image-btn:hover {
-    background-color: #27bba5;
+    background-color: #2c7a7b;
+    color: #f0f4f8;
+}
+
+
+/* Image Studio Item Styles */
+.image-studio-item {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.5rem; /* Tailwind's rounded-lg */
+    aspect-ratio: 1 / 1; /* Default to square, adjust if needed via JS or if aspect ratios are fixed */
+    background-color: #1A3A35; /* Placeholder bg */
+}
+.image-studio-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+.image-studio-item:hover img {
+    transform: scale(1.05);
+}
+.download-btn-overlay {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+.download-btn-overlay:hover {
+    opacity: 1;
+    background-color: rgba(25, 229, 198, 0.8); /* #19e5c6 with opacity */
+}
+.download-btn-overlay .material-symbols-outlined {
+    font-size: 20px;
+}
+
+/* Staged File Preview */
+#staged-file-preview {
+  background-color: #1A3A35;
+  color: #A0E1D9;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  border: 1px solid #244742;
+}
+body.light-mode #staged-file-preview {
+    background-color: #d1fae5;
+    color: #2f855a;
+    border-color: #a0aec0;
+}
+
+#staged-file-preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+#staged-file-clear-button { /* Renamed from clear-staged-file-btn for consistency */
+  background: none;
+  border: none;
+  color: #ff7575; /* Light red for clear button */
+  cursor: pointer;
+  font-size: 1.2rem; /* Make X slightly larger */
+  padding: 0;
+  line-height: 1;
+}
+#staged-file-clear-button:hover {
+  color: #ff4d4d; /* Darker red on hover */
+}
+body.light-mode #staged-file-clear-button {
+    color: #e53e3e; /* Tailwind red-600 */
+}
+body.light-mode #staged-file-clear-button:hover {
+    color: #c53030; /* Tailwind red-700 */
+}
+.user-uploaded-file-info {
+  font-size: 0.75rem;
+  color: #7A9A94;
+  margin-top: 4px;
+  font-style: italic;
+  display: block; /* Ensure it's on its own line */
+}
+.message-text .user-uploaded-file-info { /* If it's inside message-text specifically */
+   padding: 2px 0;
+}
+
+body.light-mode .user-uploaded-file-info {
+  color: #718096;
+}
+
+.user-message-content-wrapper .user-uploaded-file-info {
+  text-align: right; /* Align with user message text */
+}
+.ai-message-content-wrapper .user-uploaded-file-info {
+  text-align: left; /* Align with AI message text (though unlikely to be used here) */
+}
+
+/* Message Actions Container & Buttons */
+.message-actions-container {
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+    gap: 0.5rem; /* 8px */
+    margin-top: 0.5rem; /* 8px */
+    /* Alignment handled by parent (.ai-message-content-wrapper) or specific button margins if needed */
+}
+.ai-message-content-wrapper[dir="rtl"] .message-actions-container {
+    justify-content: flex-end; /* Align buttons to the right for RTL content */
+}
+
+
+.message-action-btn {
+    background-color: rgba(25, 229, 198, 0.08); /* #19e5c6 with low opacity */
+    color: #19e5c6;
+    border: 1px solid rgba(25, 229, 198, 0.3);
+    padding: 0.25rem 0.6rem; /* 4px 8px */
+    border-radius: 0.375rem; /* rounded-md */
+    font-size: 0.75rem; /* 12px, text-xs */
+    font-weight: 500; /* medium */
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem; /* 4px */
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+    text-transform: capitalize;
+}
+.message-action-btn .material-symbols-outlined {
+    font-size: 0.9rem; /* 14px-15px */
+    font-variation-settings: 'FILL' 0;
+    vertical-align: middle;
+}
+.message-action-btn:hover {
+    background-color: #19e5c6;
+    color: #0C1A18; /* Dark text on hover */
+    border-color: #19e5c6;
+}
+.message-action-btn:hover .material-symbols-outlined {
+   font-variation-settings: 'FILL' 1; /* Fill icon on hover */
+}
+.message-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.message-action-btn:disabled:hover { /* Prevent hover style change on disabled */
+    background-color: rgba(25, 229, 198, 0.08);
+    color: #19e5c6;
+    border-color: rgba(25, 229, 198, 0.3);
+}
+.message-action-btn:disabled:hover .material-symbols-outlined {
+   font-variation-settings: 'FILL' 0;
+}
+
+/* Light mode for message action buttons */
+body.light-mode .message-action-btn {
+    background-color: rgba(44, 122, 123, 0.1); /* #2c7a7b with low opacity */
+    color: #2c7a7b;
+    border-color: rgba(44, 122, 123, 0.3);
+}
+body.light-mode .message-action-btn:hover {
+    background-color: #2c7a7b;
+    color: #f0f4f8; /* Light text on hover */
+    border-color: #2c7a7b;
+}
+body.light-mode .message-action-btn:disabled:hover {
+    background-color: rgba(44, 122, 123, 0.1);
+    color: #2c7a7b;
+    border-color: rgba(44, 122, 123, 0.3);
+}
+
+/* Special button like "Download Resume PDF" */
+.resume-download-btn { /* This class already exists for resume builder download */
+    display: inline-flex; /* Make it part of the flex flow of actions */
+    /* If it needs to be more prominent, adjust padding/font-size here */
+    /* For example, to make it look like the main chat action buttons: */
+    /* padding: 0.5rem 1rem; font-size: 0.875rem; */
+}
+
+
+/* Settings screen: Creativity Level Select */
+body.light-mode #setting-creativity-level {
+    background-color: #e2e8f0 !important; /* Matches other light mode form elements */
+    color: #2d3748 !important;
+    border-color: #cbd5e0 !important;
+}
+body.light-mode #setting-creativity-level:focus {
+    border-color: #2c7a7b !important;
+    --tw-ring-color: rgba(44, 122, 123, 0.5) !important; /* Match focus ring color */
 }

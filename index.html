@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,40 +67,45 @@
 <body class="bg-[#0A100F]">
   <div class="lg:flex">
     <!-- Desktop Sidebar Navigation -->
-    <nav id="desktop-sidebar" class="hidden lg:flex lg:flex-col lg:w-60 xl:w-64 bg-[#0D1A18] border-r border-[#1B302C] h-screen fixed top-0 left-0 z-40 p-4 space-y-2 overflow-y-auto scrollbar-hide">
-        <div class="text-2xl font-bold text-white mb-6 p-2 flex items-center gap-3">
-            <svg class="w-8 h-8 text-[#19e5c6]" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><circle class="opacity-75" cx="12" cy="12" fill="#19e5c6" r="3"></circle></svg>
-            <span>Nova</span>
+    <nav id="desktop-sidebar" class="flex flex-col w-60 xl:w-64 bg-[#0D1A18] border-r border-[#1B302C] h-screen fixed top-0 left-0 z-40 p-4 space-y-2 overflow-y-auto scrollbar-hide transition-all duration-300 ease-in-out hidden lg:flex">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-2xl font-bold text-white p-2 flex items-center gap-3 sidebar-logo-text">
+                <svg class="w-8 h-8 text-[#19e5c6]" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><circle class="opacity-75" cx="12" cy="12" fill="#19e5c6" r="3"></circle></svg>
+                <span class="sidebar-text">Nova</span>
+            </div>
+            <button id="toggle-sidebar-btn" aria-label="Toggle sidebar" class="p-2 text-[#7A9A94] hover:text-[#19E5C6] lg:block hidden">
+                <span class="material-symbols-outlined">menu_open</span>
+            </button>
         </div>
         <button data-target="chat-list-screen-home" class="sidebar-nav-item flex items-center gap-3 p-3 rounded-lg text-[#7A9A94] hover:bg-[#1B302C] hover:text-[#19E5C6] transition-colors w-full text-left">
             <span class="material-symbols-outlined">home</span>
-            <span class="text-sm font-medium">Home</span>
+            <span class="sidebar-text text-sm font-medium nav-text-home">Home</span>
         </button>
         <button data-target="image-studio-screen" class="sidebar-nav-item flex items-center gap-3 p-3 rounded-lg text-[#7A9A94] hover:bg-[#1B302C] hover:text-[#19E5C6] transition-colors w-full text-left">
             <span class="material-symbols-outlined">imagesmode</span>
-            <span class="text-sm font-medium">Image Studio</span>
+            <span class="sidebar-text text-sm font-medium nav-text-image-studio">Image Studio</span>
         </button>
         <button data-target="chat-screen" id="sidebar-new-chat-nav-btn" class="sidebar-nav-item flex items-center gap-3 p-3 rounded-lg text-[#7A9A94] hover:bg-[#1B302C] hover:text-[#19E5C6] transition-colors w-full text-left">
             <span class="material-symbols-outlined">add_comment</span>
-            <span class="text-sm font-medium">New Chat</span>
+            <span class="sidebar-text text-sm font-medium nav-text-new-chat">New Chat</span>
         </button>
          <button data-target="create-tool-screen" id="sidebar-create-tool-nav-btn" class="sidebar-nav-item flex items-center gap-3 p-3 rounded-lg text-[#7A9A94] hover:bg-[#1B302C] hover:text-[#19E5C6] transition-colors w-full text-left">
             <span class="material-symbols-outlined">construction</span>
-            <span class="text-sm font-medium">Create Tool</span>
+            <span class="sidebar-text text-sm font-medium">Create Tool</span>
         </button>
         <button data-target="profile-screen" class="sidebar-nav-item flex items-center gap-3 p-3 rounded-lg text-[#7A9A94] hover:bg-[#1B302C] hover:text-[#19E5C6] transition-colors w-full text-left">
             <span class="material-symbols-outlined">person</span>
-            <span class="text-sm font-medium">Profile</span>
+            <span class="sidebar-text text-sm font-medium nav-text-profile">Profile</span>
         </button>
         <div class="flex-grow"></div> <!-- Spacer -->
         <button data-target="settings-screen" class="sidebar-nav-item flex items-center gap-3 p-3 rounded-lg text-[#7A9A94] hover:bg-[#1B302C] hover:text-[#19E5C6] transition-colors w-full text-left">
             <span class="material-symbols-outlined">settings</span>
-            <span class="text-sm font-medium">Settings</span>
+            <span class="sidebar-text text-sm font-medium nav-text-settings">Settings</span>
         </button>
     </nav>
 
     <!-- Main Content Area for all screens -->
-    <main id="app-main-content" class="w-full lg:ml-60 xl:ml-64">
+    <main id="app-main-content" class="w-full lg:ml-60 xl:ml-64 transition-all duration-300 ease-in-out">
       <!-- Splash Screen -->
       <div id="splash-screen" class="app-screen active bg-[#0A100F] justify-center items-center">
         <div class="relative flex size-full flex-col justify-center items-center group/design-root overflow-hidden">
@@ -124,7 +130,7 @@
             </div>
           </div>
           <div class="absolute bottom-0 left-0 right-0 p-4 text-center">
-            <p class="text-xs text-[#4A5C5A]">Version 1.9.2</p> 
+            <p class="text-xs text-[#4A5C5A]" id="splash-version-text">Version 2.0.0</p> 
           </div>
         </div>
       </div>
@@ -171,8 +177,8 @@
       <div id="signin-screen" class="app-screen bg-[#11221f] justify-center lg:justify-between">
         <div class="flex flex-col items-center px-6 pt-10 lg:pt-16 overflow-y-auto w-full">
           <div class="text-center mb-10">
-            <h1 class="text-4xl lg:text-5xl font-bold text-white tracking-tight">Welcome</h1>
-            <p class="text-sm lg:text-base text-[#93c8c0] mt-2">Sign in or create an account to continue.</p>
+            <h1 class="text-4xl lg:text-5xl font-bold text-white tracking-tight" id="signin-welcome-title">Welcome</h1>
+            <p class="text-sm lg:text-base text-[#93c8c0] mt-2" id="signin-prompt-text">Sign in or create an account to continue.</p>
           </div>
           <div class="w-full max-w-md space-y-6">
             <div class="relative">
@@ -195,7 +201,7 @@
           </div>
         </div>
          <div class="pb-8 pt-12 text-center shrink-0">
-            <p class="text-xs text-[#7A9A94]">Powered by Firebase Authentication</p>
+            <p class="text-xs text-[#7A9A94]" id="signin-poweredby-text">Powered by Firebase Authentication</p>
         </div>
       </div>
       
@@ -207,7 +213,7 @@
               <button id="chat-list-create-tool-btn" aria-label="Create New Tool" class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-[#19E5C6]/10 active:bg-[#19E5C6]/20 transition-colors lg:hidden">
                 <span class="material-symbols-outlined">construction</span>
               </button>
-              <h1 class="text-xl lg:text-2xl font-bold text-white tracking-tight flex-1 text-center lg:text-left lg:pl-2">Chats & Tools</h1>
+              <h1 class="text-xl lg:text-2xl font-bold text-white tracking-tight flex-1 text-center lg:text-left lg:pl-2" id="chat-list-title">Chats & Tools</h1>
               <button id="chat-list-new-chat-header-btn" aria-label="New Chat" class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-[#19E5C6]/10 active:bg-[#19E5C6]/20 transition-colors lg:hidden">
                 <svg fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px" xmlns="http://www.w3.org/2000/svg">
                   <path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"></path>
@@ -233,21 +239,21 @@
           <div class="flex justify-around items-center px-2 pt-2 pb-safe-bottom">
             <button data-target="chat-list-screen-home" class="nav-item active flex flex-col items-center justify-end gap-0.5 text-[#19E5C6] hover:text-opacity-80 transition-colors w-1/4 py-1">
                 <span class="material-symbols-outlined filled">home</span>
-                <span class="text-xs font-medium">Home</span>
+                <span class="text-xs font-medium nav-text-home">Home</span>
             </button>
             <button data-target="image-studio-screen" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
               <span class="material-symbols-outlined">imagesmode</span>
-              <span class="text-xs">Image Studio</span>
+              <span class="text-xs nav-text-image-studio">Image Studio</span>
             </button>
             <button data-target="chat-screen" id="chat-list-new-chat-nav-btn" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
               <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
                 <path d="M128,32a96,96,0,1,0,96,96A96.11,96.11,0,0,0,128,32Zm0,176a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Zm40-88a8,8,0,0,1-8,8H136v24a8,8,0,0,1-16,0V128H96a8,8,0,0,1,0-16h24V88a8,8,0,0,1,16,0v24h24A8,8,0,0,1,168,120Z" fill-rule="evenodd"></path>
               </svg>
-              <span class="text-xs">New Chat</span>
+              <span class="text-xs nav-text-new-chat">New Chat</span>
             </button>
             <button data-target="profile-screen" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
                <span class="material-symbols-outlined">person</span>
-              <span class="text-xs">Profile</span>
+              <span class="text-xs nav-text-profile">Profile</span>
             </button>
           </div>
           <div class="h-[calc(env(safe-area-inset-bottom)/2)]"></div>
@@ -271,12 +277,11 @@
                   <button id="chat-settings-btn" aria-label="Settings" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 w-10 bg-transparent text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200 lg:hidden">
                       <div class="text-[#19e5c6]" data-icon="Gear" data-size="24px" data-weight="regular">
                       <svg fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm88-29.84q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.21,107.21,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.71,107.71,0,0,0-26.25-10.87,8,8,0,0,0-7.06,1.49L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.21,107.21,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06Zm-16.1-6.5a73.93,73.93,0,0,1,0,8.68,8,8,0,0,0,1.74,5.48l14.19,17.73a91.57,91.57,0,0,1-6.23,15L187,173.11a8,8,0,0,0-5.1,2.64,74.11,74.11,0,0,1-6.14,6.14,8,8,0,0,0-2.64,5.1l-2.51,22.58a91.32,91.32,0,0,1-15,6.23l-17.74-14.19a8,8,0,0,0-5-1.75h-.48a73.93,73.93,0,0,1-8.68,0,8,8,0,0,0-5.48,1.74L100.45,215.8a91.57,91.57,0,0,1-15-6.23L82.89,187a8,8,0,0,0-2.64-5.1,74.11,74.11,0,0,1-6.14-6.14,8,8,0,0,0-5.1-2.64L46.43,170.6a91.32,91.32,0,0,1-6.23-15l14.19-17.74a8,8,0,0,0,1.74-5.48,73.93,73.93,0,0,1,0-8.68,8,8,0,0,0-1.74-5.48L40.2,100.45a91.57,91.57,0,0,1,6.23-15L69,82.89a8,8,0,0,0,5.1-2.64,74.11,74.11,0,0,1,6.14-6.14A8,8,0,0,0,82.89,69L85.4,46.43a91.32,91.32,0,0,1,15-6.23l17.74,14.19a8,8,0,0,0,5.48,1.74,73.93,73.93,0,0,1,8.68,0,8,8,0,0,0,5.48-1.74L155.55,40.2a91.57,91.57,0,0,1,15,6.23L173.11,69a8,8,0,0,0,2.64,5.1,74.11,74.11,0,0,1,6.14,6.14,8,8,0,0,0,5.1,2.64l22.58,2.51a91.32,91.32,0,0,1,6.23,15l-14.19,17.74A8,8,0,0,0,199.87,123.66Z"></path>
+                          <path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm88-29.84q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.21,107.21,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.71,107.71,0,0,0-26.25-10.87,8,8,0,0,0-7.06,1.49L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.21,107.21,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06Zm-16.1-6.5a73.93,73.93,0,0,1,0,8.68,8,8,0,0,0,1.74,5.48l14.19,17.73a91.57,91.57,0,0,1-6.23,15L187,173.11a8,8,0,0,0-5.1,2.64,74.11,74.11,0,0,1-6.14,6.14,8,8,0,0,0-2.64,5.1l-2.51,22.58a91.32,91.32,0,0,1-15,6.23l-17.74-14.19a8,8,0,0,0-5-1.75h-.48a73.93,73.93,0,0,1-8.68,0,8,8,0,0,0-5.48,1.74L100.45,215.8a91.57,91.57,0,0,1-15-6.23L82.89,187a8,8,0,0,0-2.64-5.1,74.11,74.11,0,0,1-6.14-6.14,8,8,0,0,0-5.1-2.64L46.43,170.6a91.32,91.32,0,0,1-6.23-15l14.19-17.74a8,8,0,0,0,1.74-5.48,73.93,73.93,0,0,1,0-8.68,8,8,0,0,0-1.74-5.48L40.2,100.45a91.57,91.57,0,0,1,6.23-15L69,82.89a8,8,0,0,0,5.1-2.64,74.11,74.11,0,0,1,6.14-6.14A8,8,0,0,0,82.89,69L85.4,46.43a91.32,91.32,0,0,1,15-6.23l17.74,14.19a8,8,0,0,0,5.48,1.74,73.93,73.93,0,0,1,8.68,0,8,8,0,0,0,5.48-1.74L155.55,40.2a91.57,91.57,0,0,1,15,6.23L173.11,69a8,8,0,0,0,2.64,5.1,74.11,74.11,0,0,1,6.14-6.14,8,8,0,0,0,5.1,2.64l22.58,2.51a91.32,91.32,0,0,1,6.23,15l-14.19,17.74A8,8,0,0,0,199.87,123.66Z"></path>
                       </svg>
                       </div>
                   </button>
-                  <div class="w-10 lg:flex items-center justify-center hidden"> 
-                  </div>
+                  <div class="w-10 lg:flex items-center justify-center hidden"></div>
                 </div>
             </div>
             <div id="chat-messages-container" class="flex-grow overflow-y-auto pb-4 flex flex-col px-2 lg:px-4">
@@ -297,7 +302,6 @@
               Translate
             </button>
           </div>
-          <!-- Staged File Preview Area -->
           <div id="staged-file-preview" class="mx-3 mb-2" style="display: none;">
                 <div class="flex items-center justify-between bg-[#1A3A35] text-[#A0E1D9] p-2 rounded-md text-xs border border-[#244742]">
                     <div class="flex items-center overflow-hidden">
@@ -310,19 +314,47 @@
                     </button>
                 </div>
             </div>
-          <div class="flex items-end px-3 py-2 gap-2 @container">
-            <button id="upload-file-button" aria-label="Upload File" class="flex items-center justify-center p-3 h-12 w-12 bg-[#1A3A35] text-[#A0E1D9] hover:text-[#19e5c6] rounded-xl shadow-md hover:bg-[#1F4B44] transition-colors duration-200 shrink-0">
-                <span class="material-symbols-outlined">attach_file</span>
+          <div id="chat-input-actions-area" class="flex items-end px-3 py-2 gap-2 @container relative">
+            <button id="advanced-options-button" aria-label="Advanced Options" class="order-1 flex items-center justify-center p-3 h-12 w-12 bg-[#1A3A35] text-[#A0E1D9] hover:text-[#19e5c6] rounded-xl shadow-md hover:bg-[#1F4B44] transition-colors duration-200 shrink-0">
+                <span class="material-symbols-outlined">tune</span>
             </button>
             <input type="file" id="file-input-hidden" class="hidden" accept=".txt,.pdf,.html,.css,.js,.py,.md,image/*"/>
             
-            <div class="flex w-full items-stretch rounded-xl bg-[#1A3A35] shadow-md">
-              <input id="chat-input" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-l-xl text-white focus:outline-0 focus:ring-2 focus:ring-[#19e5c6]/50 border-none bg-transparent h-12 placeholder:text-[#A0E1D9]/70 px-4 text-base font-normal leading-normal" placeholder="Ask Nova anything..." value=""/>
-              <div class="flex items-center rounded-r-xl">
-                <button id="voice-mode-toggle" aria-label="Toggle Voice Mode" class="flex items-center justify-center p-3 text-gray-400 hover:text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200 h-full">
+            <!-- Advanced Options Popover -->
+            <div id="advanced-options-popover" class="absolute bottom-full left-0 mb-2 w-64 bg-[#0D1A18] border border-[#244742] rounded-lg shadow-xl p-4 space-y-3 z-20" style="display: none;">
+                <h4 id="adv-opt-popover-title" class="text-sm font-semibold text-white mb-2">Advanced Options</h4>
+                <div class="flex items-center justify-between">
+                    <label for="popover-deep-thinking-toggle" class="text-xs text-[#C2E0DB] flex items-center adv-opt-deep-thinking-label">
+                        <span class="material-symbols-outlined text-base mr-2">psychology</span>Deep Thinking
+                    </label>
+                    <input id="popover-deep-thinking-toggle" type="checkbox" class="form-checkbox h-4 w-4 rounded bg-[#244742] border-[#34655e] text-[#19e5c6] focus:ring-[#19e5c6]/50 focus:ring-offset-0">
+                </div>
+                <div class="flex items-center justify-between">
+                    <label for="popover-internet-search-toggle" class="text-xs text-[#C2E0DB] flex items-center adv-opt-internet-search-label">
+                        <span class="material-symbols-outlined text-base mr-2">travel_explore</span>Internet Search
+                    </label>
+                    <input id="popover-internet-search-toggle" type="checkbox" class="form-checkbox h-4 w-4 rounded bg-[#244742] border-[#34655e] text-[#19e5c6] focus:ring-[#19e5c6]/50 focus:ring-offset-0">
+                </div>
+                 <div class="flex items-center justify-between">
+                    <label for="popover-scientific-mode-toggle" class="text-xs text-[#C2E0DB] flex items-center adv-opt-scientific-mode-label">
+                       <span class="material-symbols-outlined text-base mr-2">science</span>Scientific Mode
+                    </label>
+                    <input id="popover-scientific-mode-toggle" type="checkbox" class="form-checkbox h-4 w-4 rounded bg-[#244742] border-[#34655e] text-[#19e5c6] focus:ring-[#19e5c6]/50 focus:ring-offset-0">
+                </div>
+                <hr class="border-t border-[#244742] my-2">
+                <button id="popover-upload-file-button" class="w-full flex items-center justify-center gap-2 text-xs py-2 px-3 rounded-md bg-[#1A3A35] text-[#A0E1D9] hover:text-[#19e5c6] hover:bg-[#1F4B44] transition-colors">
+                    <span class="material-symbols-outlined text-base">attach_file</span>
+                    <span>Upload File</span>
+                </button>
+            </div>
+
+            <div class="flex w-full items-stretch rounded-xl bg-[#1A3A35] shadow-md order-2">
+              <input id="chat-input" class="order-1 form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-l-xl text-white focus:outline-0 focus:ring-2 focus:ring-[#19e5c6]/50 border-none bg-transparent h-12 placeholder:text-[#A0E1D9]/70 px-4 text-base font-normal leading-normal" placeholder="Ask Nova anything..." value=""/>
+              <div class="flex items-center rounded-r-xl order-2"> 
+                <button id="voice-mode-toggle" aria-label="Toggle Voice Mode" class="order-1 flex items-center justify-center p-3 text-gray-400 hover:text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200 h-full">
                     <span class="material-symbols-outlined">graphic_eq</span> 
                 </button>
-                <button id="mic-button" aria-label="Use microphone" class="mic-button-container relative flex items-center justify-center p-3 text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200 h-full rounded-r-xl">
+                <button id="mic-button" aria-label="Use microphone" class="order-2 mic-button-container relative flex items-center justify-center p-3 text-[#19e5c6] hover:bg-[#19e5c6]/10 transition-colors duration-200 h-full rounded-r-xl">
                     <div class="text-[#19e5c6]" data-icon="Microphone" data-size="24px" data-weight="fill">
                     <svg fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px" xmlns="http://www.w3.org/2000/svg"><path d="M128,176a48.05,48.05,0,0,0,48-48V64a48,48,0,0,0-96,0v64A48.05,48.05,0,0,0,128,176ZM96,64a32,32,0,0,1,64,0v64a32,32,0,0,1-64,0Zm40,143.6V232a8,8,0,0,1-16,0V207.6A80.11,80.11,0,0,1,48,128a8,8,0,0,1,16,0,64,64,0,0,0,128,0,8,8,0,0,1,16,0A80.11,80.11,0,0,1,136,207.6Z"></path></svg>
                     </div>
@@ -330,7 +362,7 @@
                 </button>
               </div>
             </div>
-            <button id="send-chat-button" aria-label="Send message" class="flex items-center justify-center p-3 h-12 w-12 bg-[#19e5c6] text-[#0C1A18] rounded-xl shadow-md hover:bg-[#15c4a9] transition-colors duration-200 shrink-0">
+            <button id="send-chat-button" aria-label="Send message" class="order-3 flex items-center justify-center p-3 h-12 w-12 bg-[#19e5c6] text-[#0C1A18] rounded-xl shadow-md hover:bg-[#15c4a9] transition-colors duration-200 shrink-0">
               <svg class="feather feather-arrow-up" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
                 <line x1="12" x2="12" y1="19" y2="5"></line>
                 <polyline points="5 12 12 5 19 12"></polyline>
@@ -361,49 +393,49 @@
               <span class="material-symbols-outlined text-3xl"> arrow_back_ios_new </span>
             </button>
             <div class="w-10 lg:hidden"></div> 
-            <h1 class="text-xl lg:text-2xl font-bold text-white flex-1 text-center lg:text-left lg:pl-2">Settings</h1>
+            <h1 class="text-xl lg:text-2xl font-bold text-white flex-1 text-center lg:text-left lg:pl-2" id="settings-title">Settings</h1>
           </header>
           <main class="flex-grow overflow-y-auto scrollbar-hide lg:py-6">
             <section class="py-4">
-              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3">AI Tone</h2>
+              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3" id="settings-ai-tone-label">AI Tone</h2>
               <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
                 <label class="flex-1 text-sm font-medium leading-normal flex items-center justify-center rounded-lg border border-[#34655e] px-4 py-3 text-white has-[:checked]:border-2 has-[:checked]:border-[#19e5c6] has-[:checked]:bg-[#19e5c6]/10 relative cursor-pointer transition-all duration-200 ease-in-out">
                   <span class="material-symbols-outlined mr-2 text-[#19e5c6] opacity-0 has-[:checked]:opacity-100 transition-opacity"> sentiment_satisfied </span>
-                  Friendly
+                  <span class="settings-tone-friendly-text">Friendly</span>
                   <input id="setting-ai-tone-friendly" class="invisible absolute" name="ai_tone" type="radio" value="friendly"/>
                 </label>
                 <label class="flex-1 text-sm font-medium leading-normal flex items-center justify-center rounded-lg border border-[#34655e] px-4 py-3 text-white has-[:checked]:border-2 has-[:checked]:border-[#19e5c6] has-[:checked]:bg-[#19e5c6]/10 relative cursor-pointer transition-all duration-200 ease-in-out">
                   <span class="material-symbols-outlined mr-2 text-[#19e5c6] opacity-0 has-[:checked]:opacity-100 transition-opacity"> business_center </span>
-                  Formal
+                  <span class="settings-tone-formal-text">Formal</span>
                   <input id="setting-ai-tone-formal" class="invisible absolute" name="ai_tone" type="radio" value="formal"/>
                 </label>
                 <label class="flex-1 text-sm font-medium leading-normal flex items-center justify-center rounded-lg border border-[#34655e] px-4 py-3 text-white has-[:checked]:border-2 has-[:checked]:border-[#19e5c6] has-[:checked]:bg-[#19e5c6]/10 relative cursor-pointer transition-all duration-200 ease-in-out">
                   <span class="material-symbols-outlined mr-2 text-[#19e5c6] opacity-0 has-[:checked]:opacity-100 transition-opacity"> draw </span>
-                  Creative
+                  <span class="settings-tone-creative-text">Creative</span>
                   <input id="setting-ai-tone-creative" class="invisible absolute" name="ai_tone" type="radio" value="creative"/>
                 </label>
               </div>
             </section>
 
             <section class="py-4">
-              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3">Creativity Level</h2>
+              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3" id="settings-creativity-label">Creativity Level</h2>
               <div class="space-y-2 bg-[#1a322f] p-4 rounded-lg">
-                <p class="text-sm text-[#C2E0DB] mb-2">Adjust how factual or inventive Nova's responses are.</p>
+                <p class="text-sm text-[#C2E0DB] mb-2" id="settings-creativity-desc">Adjust how factual or inventive Nova's responses are.</p>
                 <select id="setting-creativity-level" class="form-select w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] lg:text-base">
-                  <option value="focused">Focused (More Factual)</option>
-                  <option value="balanced" selected>Balanced (Default)</option>
-                  <option value="inventive">Inventive (More Creative)</option>
+                  <option value="focused" id="settings-creativity-focused">Focused (More Factual)</option>
+                  <option value="balanced" selected id="settings-creativity-balanced">Balanced (Default)</option>
+                  <option value="inventive" id="settings-creativity-inventive">Inventive (More Creative)</option>
                 </select>
               </div>
             </section>
 
             <section class="py-4 space-y-3">
-              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3">Features</h2>
+              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3" id="settings-features-label">Features</h2>
                <div class="bg-[#1a322f] p-4 rounded-lg">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center">
                             <span class="material-symbols-outlined text-[#19e5c6] mr-3"> record_voice_over </span>
-                            <span class="text-white text-base font-normal">Voice Output (TTS)</span>
+                            <span class="text-white text-base font-normal" id="settings-tts-label">Voice Output (TTS)</span>
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input id="setting-tts-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Voice Output">
@@ -415,7 +447,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center">
                             <span class="material-symbols-outlined text-[#19e5c6] mr-3">travel_explore</span>
-                            <span class="text-white text-base font-normal">Enable Internet Search</span>
+                            <span class="text-white text-base font-normal" id="settings-internet-search-label">Enable Internet Search</span>
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input id="setting-internet-search-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Internet Search">
@@ -427,7 +459,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center">
                             <span class="material-symbols-outlined text-[#19e5c6] mr-3">psychology</span>
-                            <span class="text-white text-base font-normal">Enable Deep Thinking Mode</span>
+                            <span class="text-white text-base font-normal" id="settings-deep-thinking-label">Enable Deep Thinking Mode</span>
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input id="setting-deep-thinking-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Deep Thinking">
@@ -435,11 +467,11 @@
                         </label>
                     </div>
                 </div>
-                 <div class="bg-[#1a322f] p-4 rounded-lg">
+                <div class="bg-[#1a322f] p-4 rounded-lg">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center">
                             <span class="material-symbols-outlined text-[#19e5c6] mr-3">science</span>
-                            <span class="text-white text-base font-normal">Advanced Scientific Research Mode</span>
+                            <span class="text-white text-base font-normal" id="settings-scientific-mode-label">Advanced Scientific Research Mode</span>
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input id="setting-advanced-scientific-mode-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Advanced Scientific Research Mode">
@@ -449,12 +481,12 @@
                 </div>
             </section>
             <section class="py-4">
-              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3">Appearance</h2>
+              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3" id="settings-appearance-label">Appearance</h2>
               <div class="bg-[#1a322f] p-4 rounded-lg">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center">
                     <span class="material-symbols-outlined text-[#19e5c6] mr-3"> dark_mode </span>
-                    <span class="text-white text-base font-normal">Dark Mode</span>
+                    <span class="text-white text-base font-normal" id="settings-dark-mode-label">Dark Mode</span>
                   </div>
                   <label class="relative inline-flex items-center cursor-pointer">
                     <input id="setting-dark-mode-toggle" type="checkbox" value="" class="sr-only peer" aria-label="Toggle Dark Mode">
@@ -463,22 +495,38 @@
                 </div>
               </div>
             </section>
+            <section class="py-4">
+                <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3" id="settings-general-memories-label">General Memories</h2>
+                <div class="bg-[#1a322f] p-4 rounded-lg space-y-3">
+                    <textarea id="setting-general-memory-input" rows="3" class="form-textarea w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] placeholder:text-[#7A9A94]" placeholder="Type a general note or memory..."></textarea>
+                    <button id="setting-save-general-memory-btn" class="w-full rounded-md bg-[#19e5c6] py-2 px-4 text-[#11221f] text-sm font-semibold hover:bg-opacity-80 transition-colors">Save General Memory</button>
+                    <div id="settings-general-memories-list" class="space-y-2 max-h-48 overflow-y-auto scrollbar-hide">
+                        <!-- General memories will be listed here -->
+                    </div>
+                </div>
+            </section>
              <section class="py-4">
-              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3">Other</h2>
-              <button class="flex items-center w-full bg-[#1a322f] p-4 rounded-lg hover:bg-[#244742] transition-colors duration-200">
-                <span class="material-symbols-outlined text-[#19e5c6] mr-3"> translate </span>
-                <span class="text-white text-base font-normal flex-1 text-left">Language (App UI)</span>
-                <span class="text-[#93c8c0] text-sm mr-2">English</span>
-                <span class="material-symbols-outlined text-[#93c8c0]"> chevron_right </span>
-              </button>
+              <h2 class="text-lg lg:text-xl font-semibold text-[#e0e0e0] mb-3" id="settings-other-label">Other</h2>
+              <div class="bg-[#1a322f] p-4 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <span class="material-symbols-outlined text-[#19e5c6] mr-3"> translate </span>
+                        <span class="text-white text-base font-normal" id="settings-language-label">Language (App UI)</span>
+                    </div>
+                    <select id="setting-language-select" class="form-select rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-2 text-sm focus:ring-1 focus:ring-[#19e5c6] focus:border-[#19e5c6]">
+                        <option value="en">English</option>
+                        <option value="ar">العربية (Arabic)</option>
+                    </select>
+                </div>
+              </div>
               <div class="mt-3 bg-[#1a322f] p-4 rounded-lg">
                 <div class="flex items-start">
                     <span class="material-symbols-outlined text-[#19e5c6] mr-3 mt-1">badge</span>
                     <div class="text-white text-sm flex-grow">
-                        <p class="font-medium">Developer Information</p>
-                        <p class="mt-1 text-xs text-[#c2e0db]">Mohamed Ibrahim Abdullah</p>
+                        <p class="font-medium" id="settings-dev-info-title">Developer Information</p>
+                        <p class="mt-1 text-xs text-[#c2e0db]" id="settings-dev-name">Mohamed Ibrahim Abdullah</p>
                         <p class="mt-1 text-xs text-[#c2e0db]">
-                            Contact (WhatsApp & Calls): 
+                            <span id="settings-dev-contact-label">Contact (WhatsApp & Calls):</span> 
                             <a href="tel:+201128966996" class="text-[#19e5c6] hover:underline">+201128966996</a>
                         </p>
                     </div>
@@ -491,19 +539,19 @@
           <div class="flex justify-around items-center px-2 pt-2 pb-safe-bottom">
             <button data-target="chat-list-screen-home" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4"> 
               <span class="material-symbols-outlined">home</span>
-              <span class="text-xs">Home</span>
+              <span class="text-xs nav-text-home">Home</span>
             </button>
             <button data-target="image-studio-screen" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4"> 
               <span class="material-symbols-outlined">imagesmode</span>
-              <span class="text-xs">Image Studio</span>
+              <span class="text-xs nav-text-image-studio">Image Studio</span>
             </button>
              <button data-target="profile-screen" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4"> 
               <span class="material-symbols-outlined">person</span>
-              <span class="text-xs">Profile</span>
+              <span class="text-xs nav-text-profile">Profile</span>
             </button>
             <button data-target="settings-screen" class="nav-item active flex flex-col items-center justify-end gap-1 text-[#19E5C6] p-2 w-1/4"> 
               <span class="material-symbols-outlined filled">settings</span>
-              <span class="text-xs font-semibold">Settings</span>
+              <span class="text-xs font-semibold nav-text-settings">Settings</span>
             </button>
           </div>
           <div class="h-[calc(env(safe-area-inset-bottom)/2)]"></div> 
@@ -519,7 +567,7 @@
                         <span class="material-symbols-outlined text-3xl"> arrow_back_ios_new </span>
                     </button>
                 </div> 
-                <h1 class="text-xl lg:text-2xl font-bold text-white flex-1 text-center lg:text-left lg:pl-2">Profile</h1>
+                <h1 class="text-xl lg:text-2xl font-bold text-white flex-1 text-center lg:text-left lg:pl-2" id="profile-title">Profile</h1>
                 <div class="w-10"></div> 
             </header>
             <main class="flex-grow flex flex-col items-center text-white p-6 lg:p-8">
@@ -529,18 +577,18 @@
                 
                 <div class="w-full max-w-md lg:max-w-lg space-y-4">
                     <div id="profile-user-details" class="bg-[#1a322f] p-4 rounded-lg shadow">
-                      <h3 class="font-semibold text-[#19e5c6] mb-2 text-base">Learned Information:</h3>
+                      <h3 class="font-semibold text-[#19e5c6] mb-2 text-base" id="profile-learned-info-label">Learned Information:</h3>
                       <div class="text-xs lg:text-sm text-gray-300 space-y-1">
-                          <p><strong class="text-[#A0E1D9]">Interests:</strong> <span id="profile-interests">Not yet recorded.</span></p>
-                          <p><strong class="text-[#A0E1D9]">Preferences:</strong> <span id="profile-preferences">Not yet recorded.</span></p>
-                          <p><strong class="text-[#A0E1D9]">Facts:</strong> <span id="profile-facts">Not yet recorded.</span></p>
+                          <p><strong class="text-[#A0E1D9]" id="profile-interests-label">Interests:</strong> <span id="profile-interests">Not yet recorded.</span></p>
+                          <p><strong class="text-[#A0E1D9]" id="profile-preferences-label">Preferences:</strong> <span id="profile-preferences">Not yet recorded.</span></p>
+                          <p><strong class="text-[#A0E1D9]" id="profile-facts-label">Facts:</strong> <span id="profile-facts">Not yet recorded.</span></p>
                       </div>
                     </div>
 
                     <button id="view-memories-btn" class="w-full flex items-center justify-between bg-[#1a322f] p-4 rounded-lg hover:bg-[#244742] transition-colors duration-200">
                         <div class="flex items-center">
                             <span class="material-symbols-outlined text-[#19e5c6] mr-3">memory</span>
-                            <span class="text-white text-base font-normal">View Saved Memories</span>
+                            <span class="text-white text-base font-normal" id="profile-view-memories-text">View Saved Memories</span>
                         </div>
                         <span class="material-symbols-outlined text-[#93c8c0]">chevron_right</span>
                     </button>
@@ -555,21 +603,21 @@
             <div class="flex justify-around items-center px-2 pt-2 pb-safe-bottom">
                <button data-target="chat-list-screen-home" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4">
                     <span class="material-symbols-outlined">home</span>
-                    <span class="text-xs">Home</span>
+                    <span class="text-xs nav-text-home">Home</span>
                 </button>
                 <button data-target="image-studio-screen" class="nav-item flex flex-col items-center justify-end gap-1 text-[#93c8c0] hover:text-[#19e5c6] transition-colors p-2 w-1/4">
                     <span class="material-symbols-outlined">imagesmode</span>
-                    <span class="text-xs">Image Studio</span>
+                    <span class="text-xs nav-text-image-studio">Image Studio</span>
                 </button>
                 <button data-target="chat-screen" id="profile-new-chat-nav-btn" class="nav-item flex flex-col items-center justify-end gap-1 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
                     <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
                         <path d="M128,32a96,96,0,1,0,96,96A96.11,96.11,0,0,0,128,32Zm0,176a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Zm40-88a8,8,0,0,1-8,8H136v24a8,8,0,0,1-16,0V128H96a8,8,0,0,1,0-16h24V88a8,8,0,0,1,16,0v24h24A8,8,0,0,1,168,120Z" fill-rule="evenodd"></path>
                     </svg>
-                    <span class="text-xs">New Chat</span>
+                    <span class="text-xs nav-text-new-chat">New Chat</span>
                 </button>
                 <button data-target="profile-screen" class="nav-item active flex flex-col items-center justify-end gap-1 text-[#19E5C6] p-2 w-1/4">
                     <span class="material-symbols-outlined filled">person</span>
-                    <span class="text-xs font-semibold">Profile</span>
+                    <span class="text-xs font-semibold nav-text-profile">Profile</span>
                 </button>
             </div>
           <div class="h-[calc(env(safe-area-inset-bottom)/2)]"></div>
@@ -610,7 +658,7 @@
         <div class="flex-grow overflow-hidden flex flex-col"> 
             <header class="sticky top-0 z-10 flex items-center bg-[#0C1A18]/80 backdrop-blur-md p-4 justify-between border-b border-[#19e5c6]/20 shrink-0">
                 <div class="w-12 lg:hidden"></div> 
-                <h2 class="text-white text-xl lg:text-2xl font-bold flex-1 text-center lg:text-left lg:pl-2">Code Canvas</h2>
+                <h2 id="code-canvas-title" class="text-white text-xl lg:text-2xl font-bold flex-1 text-center lg:text-left lg:pl-2">Code Canvas</h2>
                 <div class="w-12 flex justify-end">
                     <button id="code-canvas-close-btn" aria-label="Close Code Canvas" class="text-[#19e5c6] p-2 -mr-2">
                         <span class="material-symbols-outlined text-3xl">close</span>
@@ -654,24 +702,24 @@
         <div class="flex-grow flex flex-col overflow-hidden">
             <header class="sticky top-0 z-10 bg-[#0D1A18]/80 backdrop-blur-md shrink-0">
                 <div class="flex items-center p-4 pb-3 justify-center lg:justify-start">
-                    <h1 class="text-xl lg:text-2xl font-bold text-white tracking-tight lg:pl-2">Image Studio</h1>
+                    <h1 id="image-studio-title" class="text-xl lg:text-2xl font-bold text-white tracking-tight lg:pl-2">Image Studio</h1>
                 </div>
             </header>
             <main class="flex-grow p-4 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
                 <div>
-                    <label for="image-studio-prompt-input" class="block text-sm font-medium text-[#A0E1D9] mb-1">Image Prompt</label>
+                    <label for="image-studio-prompt-input" class="block text-sm font-medium text-[#A0E1D9] mb-1" id="image-studio-prompt-label">Image Prompt</label>
                     <textarea id="image-studio-prompt-input" rows="3" class="form-textarea w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] placeholder:text-[#7A9A94] lg:text-base" placeholder="e.g., A majestic lion in a vibrant jungle, hyperrealistic"></textarea>
                 </div>
                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end"> 
                     <div>
-                        <label for="image-studio-engine-select" class="block text-sm font-medium text-[#A0E1D9] mb-1">Image Generation Engine</label>
+                        <label for="image-studio-engine-select" class="block text-sm font-medium text-[#A0E1D9] mb-1" id="image-studio-engine-label">Image Generation Engine</label>
                         <select id="image-studio-engine-select" class="form-select w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] lg:text-base">
                             <option value="standard" selected>Standard (Free - Imagen 3.0)</option>
                             <option value="imagefx">ImageFX Engine (Premium - Highest Quality)</option>
                         </select>
                     </div>
                     <div>
-                        <label for="image-studio-aspect-ratio-select" class="block text-sm font-medium text-[#A0E1D9] mb-1">Aspect Ratio</label>
+                        <label for="image-studio-aspect-ratio-select" class="block text-sm font-medium text-[#A0E1D9] mb-1" id="image-studio-aspect-label">Aspect Ratio</label>
                         <select id="image-studio-aspect-ratio-select" class="form-select w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] lg:text-base">
                             <option value="1:1" selected>1:1 (Square)</option>
                             <option value="16:9">16:9 (Landscape)</option>
@@ -683,7 +731,7 @@
                 </div>
                 <button id="image-studio-generate-btn" class="w-full lg:max-w-xs lg:self-start rounded-full bg-[#19e5c6] h-12 text-[#11221f] text-base font-bold hover:bg-opacity-80 transition-colors duration-200 flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined">auto_awesome</span>
-                    Generate Images
+                    <span id="image-studio-generate-text">Generate Images</span>
                 </button>
                 <div id="image-studio-loading-indicator" class="text-center py-4 text-[#A0E1D9]" style="display: none;">
                     <div class="flex flex-col items-center justify-center">
@@ -691,7 +739,7 @@
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Generating your masterpieces...
+                        <span id="image-studio-loading-text">Generating your masterpieces...</span>
                     </div>
                 </div>
                 <div id="image-studio-error-message" class="text-center py-2 text-red-400" style="display: none;"></div>
@@ -699,7 +747,7 @@
                 </div>
                  <button id="image-studio-download-all-btn" class="w-full mt-2 lg:max-w-xs lg:self-start rounded-full bg-[#1A3A35] h-11 text-[#19e5c6] text-sm font-bold hover:bg-[#1F4B44] transition-colors duration-200 flex items-center justify-center gap-2" style="display: none;">
                     <span class="material-symbols-outlined">download_for_offline</span>
-                    Download All Images
+                    <span id="image-studio-download-all-text">Download All Images</span>
                 </button>
             </main>
         </div>
@@ -707,21 +755,21 @@
           <div class="flex justify-around items-center px-2 pt-2 pb-safe-bottom">
             <button data-target="chat-list-screen-home" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
                 <span class="material-symbols-outlined">home</span>
-              <span class="text-xs">Home</span>
+              <span class="text-xs nav-text-home">Home</span>
             </button>
             <button data-target="image-studio-screen" class="nav-item active flex flex-col items-center justify-end gap-0.5 text-[#19E5C6] transition-colors w-1/4 py-1">
               <span class="material-symbols-outlined filled">imagesmode</span>
-              <span class="text-xs font-medium">Image Studio</span>
+              <span class="text-xs font-medium nav-text-image-studio">Image Studio</span>
             </button>
             <button data-target="chat-screen" id="image-studio-new-chat-nav-btn" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
               <svg fill="currentColor" height="26px" viewBox="0 0 256 256" width="26px" xmlns="http://www.w3.org/2000/svg">
                 <path d="M128,32a96,96,0,1,0,96,96A96.11,96.11,0,0,0,128,32Zm0,176a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Zm40-88a8,8,0,0,1-8,8H136v24a8,8,0,0,1-16,0V128H96a8,8,0,0,1,0-16h24V88a8,8,0,0,1,16,0v24h24A8,8,0,0,1,168,120Z" fill-rule="evenodd"></path>
               </svg>
-              <span class="text-xs">New Chat</span>
+              <span class="text-xs nav-text-new-chat">New Chat</span>
             </button>
             <button data-target="profile-screen" class="nav-item flex flex-col items-center justify-end gap-0.5 text-[#7A9A94] hover:text-[#19E5C6] transition-colors w-1/4 py-1">
                <span class="material-symbols-outlined">person</span>
-              <span class="text-xs">Profile</span>
+              <span class="text-xs nav-text-profile">Profile</span>
             </button>
           </div>
           <div class="h-[calc(env(safe-area-inset-bottom)/2)]"></div>
@@ -737,26 +785,26 @@
                         <span class="material-symbols-outlined text-3xl">arrow_back_ios_new</span>
                     </button>
                     <div class="w-10 lg:hidden"></div>
-                    <h1 class="text-xl lg:text-2xl font-bold text-white tracking-tight flex-1 text-center lg:text-left lg:pl-2">Create New Tool</h1>
+                    <h1 class="text-xl lg:text-2xl font-bold text-white tracking-tight flex-1 text-center lg:text-left lg:pl-2" id="create-tool-title">Create New Tool</h1>
                     <div class="w-10"></div>
                 </div>
             </header>
             <main class="flex-grow p-4 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
                 <div>
-                    <label for="tool-name-input" class="block text-sm font-medium text-[#A0E1D9] mb-1">Tool Name</label>
+                    <label for="tool-name-input" class="block text-sm font-medium text-[#A0E1D9] mb-1" id="tool-name-label">Tool Name</label>
                     <input type="text" id="tool-name-input" class="form-input w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] placeholder:text-[#7A9A94] lg:text-base" placeholder="e.g., Quick Translator, Story Idea Generator"/>
                 </div>
                 <div>
-                    <label for="tool-instructions-input" class="block text-sm font-medium text-[#A0E1D9] mb-1">Tool Instructions & Persona (System Prompt)</label>
+                    <label for="tool-instructions-input" class="block text-sm font-medium text-[#A0E1D9] mb-1" id="tool-instructions-label">Tool Instructions & Persona (System Prompt)</label>
                     <textarea id="tool-instructions-input" rows="8" class="form-textarea w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] placeholder:text-[#7A9A94] lg:text-base resize-none" placeholder="Describe what this tool does and how it should behave. E.g., 'You are a helpful assistant that translates text to French. Be concise and accurate.'"></textarea>
                 </div>
                  <div>
-                    <label for="tool-knowledge-input" class="block text-sm font-medium text-[#A0E1D9] mb-1">Initial Knowledge (Optional)</label>
+                    <label for="tool-knowledge-input" class="block text-sm font-medium text-[#A0E1D9] mb-1" id="tool-knowledge-label">Initial Knowledge (Optional)</label>
                     <textarea id="tool-knowledge-input" rows="5" class="form-textarea w-full rounded-lg border border-[#244742] bg-[#1A3A35] text-white p-3 focus:ring-2 focus:ring-[#19e5c6] focus:border-[#19e5c6] placeholder:text-[#7A9A94] lg:text-base resize-none" placeholder="Provide some initial context or data for the tool to use. (e.g., a list of common phrases, a short story template)"></textarea>
                 </div>
                 <button id="save-tool-button" class="w-full lg:max-w-xs lg:self-start rounded-full bg-[#19e5c6] h-12 text-[#11221f] text-base font-bold hover:bg-opacity-80 transition-colors duration-200 flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined">save</span>
-                    Save Tool
+                    <span id="save-tool-text">Save Tool</span>
                 </button>
                 <p id="create-tool-error-message" class="text-sm text-red-400 text-center mt-2" style="display: none;"></p>
             </main>
@@ -772,7 +820,7 @@
                         <span class="material-symbols-outlined text-3xl">arrow_back_ios_new</span>
                     </button>
                     <div class="w-10 lg:hidden"></div>
-                    <h1 class="text-xl lg:text-2xl font-bold text-white tracking-tight flex-1 text-center lg:text-left lg:pl-2">Saved Memories</h1>
+                    <h1 id="memories-title" class="text-xl lg:text-2xl font-bold text-white tracking-tight flex-1 text-center lg:text-left lg:pl-2">Saved Memories</h1>
                     <div class="w-10"></div>
                 </div>
             </header>
@@ -781,7 +829,6 @@
             </main>
         </div>
       </div>
-
 
     </main>
   </div>
@@ -805,5 +852,6 @@
 </script>
   <script type="module" src="index.js"></script>
 </body>
-</html><link rel="stylesheet" href="index.css">
+</html>
+<link rel="stylesheet" href="index.css">
 <script src="index.tsx" type="module"></script>

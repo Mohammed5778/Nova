@@ -57,10 +57,16 @@ let processLogListElement = null;
 let toggleProcessLogButtonElement = null;
 let processLogCloseButtonElement = null;
 let generateImageChatButtonElement = null;
-let uploadFileButton = null;
+let advancedOptionsButton = null;
+let advancedOptionsPopover = null;
+let popoverDeepThinkingToggle = null;
+let popoverInternetSearchToggle = null;
+let popoverScientificModeToggle = null;
+let popoverUploadFileButton = null;
 let fileInputHidden = null;
 let stagedFilePreviewElement = null;
 let stagedFileClearButton = null;
+let chatInputActionsArea = null;
 
 
 // Settings Elements
@@ -71,6 +77,10 @@ let internetSearchToggle = null;
 let deepThinkingToggle = null;
 let creativityLevelSelect = null;
 let advancedScientificModeToggle = null;
+let settingLanguageSelect = null;
+let generalMemoryInput = null;
+let saveGeneralMemoryButton = null;
+let generalMemoriesListContainer = null;
 
 
 // Profile Screen Elements
@@ -150,6 +160,82 @@ let createToolBackButton = null;
 let createToolErrorMessageElement = null;
 let chatListCreateToolButton = null;
 
+// Desktop Sidebar
+let desktopSidebar = null;
+let toggleSidebarButton = null;
+let appMainContent = null;
+
+
+// Chat History Interfaces
+/*
+interface ChatMessage {
+  id: string;
+  sender: 'User' | 'Nova' | 'System' | 'Nova (Tool Mode)';
+  text: string;
+  timestamp: number;
+  sources?: { uri: string, title: string }[];
+  detectedLanguage?: 'en' | 'ar' | 'unknown';
+  messageType?: 'text' | 'image';
+  imageData?: {
+      base64: string;
+      mimeType: string;
+      promptForImage: string;
+  };
+  userUploadedFile?: {
+      name: string;
+      type: 'image' | 'text' | 'other';
+      isImage: boolean;
+  };
+}
+
+
+interface ChatSession {
+  id:string;
+  title: string;
+  messages: ChatMessage[];
+  lastUpdated: number;
+  aiToneUsed?: string;
+  basedOnToolId?: string;
+}
+
+// User Profile Interface for Memory
+interface UserProfile {
+    name?: string;
+    interests: string[];
+    preferences: { [key: string]: string };
+    facts: string[];
+}
+
+// Manual Memory Interface (New)
+interface SavedMemory {
+    id: string;
+    text: string;
+    sender: string;
+    chatId: string | null;
+    originalMessageId: string;
+    timestamp: number;
+    userId: string;
+}
+
+// Custom Tool Interface (New)
+interface CustomTool {
+    id: string;
+    name: string;
+    instructions: string;
+    knowledge?: string;
+    icon?: string;
+    lastUsed?: number;
+}
+
+// Staged File Interface (New)
+interface StagedFile {
+    name: string;
+    type: 'text' | 'image';
+    content: string;
+    mimeType: string;
+}
+*/
+
 // Global State
 let currentScreen = SPLASH_SCREEN_ID;
 const screens = [SPLASH_SCREEN_ID, ONBOARDING_SCREEN_ID, SIGNIN_SCREEN_ID, CHAT_LIST_SCREEN_ID, CHAT_SCREEN_ID, SETTINGS_SCREEN_ID, PROFILE_SCREEN_ID, WEBVIEW_SCREEN_ID, IMAGE_VIEWER_SCREEN_ID, CODE_CANVAS_SCREEN_ID, IMAGE_STUDIO_SCREEN_ID, CREATE_TOOL_SCREEN_ID, MEMORIES_SCREEN_ID];
@@ -165,9 +251,11 @@ let simulatedProcessInterval;
 let chatSessions = [];
 let currentChatSessionId = null;
 let userProfile = { interests: [], preferences: {}, facts: [] };
-let savedMemories = [];
+let savedMemories = []; // Chat-specific saved memories
+let generalMemories = []; // General memories from settings
 let customTools = [];
 let stagedFile = null;
+let editingUserMessageId = null; // For editing user messages
 
 
 // Feature States
@@ -183,6 +271,8 @@ let advancedScientificModeEnabled = false;
 let currentImageEngine = 'standard';
 let currentChatIsBasedOnTool = null;
 let currentCreativityLevel = 'balanced';
+let currentLanguage = 'en';
+let isSidebarCollapsed = false;
 
 
 // Firebase State
@@ -202,9 +292,202 @@ if (WebSpeechRecognition) {
     recognition.lang = navigator.language || 'en-US';
 }
 
-// For PDF and Excel export (ensure these are declared if used before CDN script loads, though typically they are used in event handlers)
-var html2pdf;
-var XLSX;
+// --- UI String Translations ---
+const uiStrings = {
+    en: {
+        // Splash
+        splashVersion: "Version 2.0.2", // Updated version
+        // Onboarding
+        onboardingNext: "Next",
+        onboardingGetStarted: "Get Started",
+        onboardingSkip: "Skip",
+        // Sign In
+        signInWelcome: "Welcome",
+        signInPrompt: "Sign in or create an account to continue.",
+        signInEmailPlaceholder: "Email",
+        signInPasswordPlaceholder: "Password",
+        signInButton: "Sign In",
+        signUpButton: "Sign Up",
+        signInPoweredBy: "Powered by Firebase Authentication",
+        // Chat List
+        chatListTitle: "Chats & Tools",
+        searchChatsToolsPlaceholder: "Search chats & tools...",
+        // Chat Screen
+        chatInputPlaceholder: "Ask Nova anything...",
+        chatInputPlaceholderVoice: "Voice mode active...",
+        chatInputPlaceholderEditing: "Edit your message...",
+        // Settings
+        settingsTitle: "Settings",
+        settingsAiTone: "AI Tone",
+        settingsFriendly: "Friendly",
+        settingsFormal: "Formal",
+        settingsCreative: "Creative",
+        settingsCreativity: "Creativity Level",
+        settingsCreativityDesc: "Adjust how factual or inventive Nova's responses are.",
+        settingsCreativityFocused: "Focused (More Factual)",
+        settingsCreativityBalanced: "Balanced (Default)",
+        settingsCreativityInventive: "Inventive (More Creative)",
+        settingsFeatures: "Features",
+        settingsTTS: "Voice Output (TTS)",
+        settingsInternetSearch: "Enable Internet Search",
+        settingsDeepThinking: "Enable Deep Thinking Mode",
+        settingsScientificMode: "Advanced Scientific Research Mode",
+        settingsAppearance: "Appearance",
+        settingsDarkMode: "Dark Mode",
+        settingsOther: "Other",
+        settingsLanguage: "Language (App UI)",
+        settingsDevInfoTitle: "Developer Information",
+        settingsDevName: "Mohamed Ibrahim Abdullah",
+        settingsDevContact: "Contact (WhatsApp & Calls):",
+        settingsGeneralMemories: "General Memories",
+        settingsGeneralMemoryPlaceholder: "Type a general note or memory...",
+        settingsSaveGeneralMemory: "Save General Memory",
+        // Profile
+        profileTitle: "Profile",
+        profileLearnedInfo: "Learned Information:",
+        profileInterests: "Interests:",
+        profilePreferences: "Preferences:",
+        profileFacts: "Facts:",
+        profileViewMemories: "View Saved Memories",
+        profileLogout: "Logout",
+        // Memories
+        memoriesTitle: "Saved Memories",
+        memoriesNone: "No memories saved yet.",
+        // Create Tool
+        createToolTitle: "Create New Tool",
+        toolNameLabel: "Tool Name",
+        toolInstructionsLabel: "Tool Instructions & Persona (System Prompt)",
+        toolKnowledgeLabel: "Initial Knowledge (Optional)",
+        toolSaveButton: "Save Tool",
+        // Image Studio
+        imageStudioTitle: "Image Studio",
+        imageStudioPromptLabel: "Image Prompt",
+        imageStudioEngineLabel: "Image Generation Engine",
+        imageStudioAspectLabel: "Aspect Ratio",
+        imageStudioGenerateButton: "Generate Images",
+        imageStudioLoading: "Generating your masterpieces...",
+        imageStudioDownloadAll: "Download All Images",
+        // Code Canvas
+        codeCanvasTitle: "Code Canvas",
+        codeCanvasShowPreview: "Show Preview",
+        codeCanvasShowCode: "Show Code",
+        codeCanvasCopyToChat: "Copy to Chat",
+        // Advanced Options Popover
+        advOptTitle: "Advanced Options",
+        advOptDeepThinking: "Deep Thinking",
+        advOptInternetSearch: "Internet Search",
+        advOptScientificMode: "Scientific Mode",
+        advOptUploadFile: "Upload File",
+        // Misc
+        sendButtonDefault: "Send",
+        sendButtonUpdate: "Update Message",
+        editMessage: "Edit message",
+        regenerateResponse: "Regenerate response",
+        // Nav
+        navHome: "Home",
+        navImageStudio: "Image Studio",
+        navNewChat: "New Chat",
+        navProfile: "Profile",
+        navSettings: "Settings",
+    },
+    ar: {
+        // Splash
+        splashVersion: "الإصدار 2.0.2", // Updated version
+        // Onboarding
+        onboardingNext: "التالي",
+        onboardingGetStarted: "ابدأ الآن",
+        onboardingSkip: "تخطي",
+        // Sign In
+        signInWelcome: "مرحباً بك",
+        signInPrompt: "سجل الدخول أو أنشئ حسابًا للمتابعة.",
+        signInEmailPlaceholder: "البريد الإلكتروني",
+        signInPasswordPlaceholder: "كلمة المرور",
+        signInButton: "تسجيل الدخول",
+        signUpButton: "إنشاء حساب",
+        signInPoweredBy: "مدعوم بواسطة مصادقة Firebase",
+        // Chat List
+        chatListTitle: "الدردشات والأدوات",
+        searchChatsToolsPlaceholder: "ابحث في الدردشات والأدوات...",
+        // Chat Screen
+        chatInputPlaceholder: "اسأل نوفا أي شيء...",
+        chatInputPlaceholderVoice: "وضع الصوت نشط...",
+        chatInputPlaceholderEditing: "عدّل رسالتك...",
+        // Settings
+        settingsTitle: "الإعدادات",
+        settingsAiTone: "نبرة الذكاء الاصطناعي",
+        settingsFriendly: "ودود",
+        settingsFormal: "رسمي",
+        settingsCreative: "إبداعي",
+        settingsCreativity: "مستوى الإبداع",
+        settingsCreativityDesc: "اضبط مدى واقعية أو ابتكار ردود نوفا.",
+        settingsCreativityFocused: "مركّز (أكثر واقعية)",
+        settingsCreativityBalanced: "متوازن (افتراضي)",
+        settingsCreativityInventive: "مبتكر (أكثر إبداعًا)",
+        settingsFeatures: "الميزات",
+        settingsTTS: "الإخراج الصوتي (TTS)",
+        settingsInternetSearch: "تفعيل البحث عبر الإنترنت",
+        settingsDeepThinking: "تفعيل وضع التفكير العميق",
+        settingsScientificMode: "وضع البحث العلمي المتقدم",
+        settingsAppearance: "المظهر",
+        settingsDarkMode: "الوضع الداكن",
+        settingsOther: "أخرى",
+        settingsLanguage: "لغة الواجهة",
+        settingsDevInfoTitle: "معلومات المطور",
+        settingsDevName: "محمد ابراهيم عبدالله",
+        settingsDevContact: "للتواصل (واتساب واتصال):",
+        settingsGeneralMemories: "الذكريات العامة",
+        settingsGeneralMemoryPlaceholder: "اكتب ملاحظة أو ذكرى عامة...",
+        settingsSaveGeneralMemory: "حفظ الذاكرة العامة",
+        // Profile
+        profileTitle: "الملف الشخصي",
+        profileLearnedInfo: "المعلومات المكتسبة:",
+        profileInterests: "الاهتمامات:",
+        profilePreferences: "التفضيلات:",
+        profileFacts: "الحقائق:",
+        profileViewMemories: "عرض الذكريات المحفوظة",
+        profileLogout: "تسجيل الخروج",
+        // Memories
+        memoriesTitle: "الذكريات المحفوظة",
+        memoriesNone: "لا توجد ذكريات محفوظة بعد.",
+        // Create Tool
+        createToolTitle: "إنشاء أداة جديدة",
+        toolNameLabel: "اسم الأداة",
+        toolInstructionsLabel: "تعليمات الأداة والشخصية (موجه النظام)",
+        toolKnowledgeLabel: "المعرفة الأولية (اختياري)",
+        toolSaveButton: "حفظ الأداة",
+        // Image Studio
+        imageStudioTitle: "استوديو الصور",
+        imageStudioPromptLabel: "موجه الصورة",
+        imageStudioEngineLabel: "محرك توليد الصور",
+        imageStudioAspectLabel: "نسبة العرض إلى الارتفاع",
+        imageStudioGenerateButton: "توليد الصور",
+        imageStudioLoading: "جاري إنشاء روائعك الفنية...",
+        imageStudioDownloadAll: "تنزيل جميع الصور",
+        // Code Canvas
+        codeCanvasTitle: "لوحة الأكواد",
+        codeCanvasShowPreview: "عرض المعاينة",
+        codeCanvasShowCode: "عرض الكود",
+        codeCanvasCopyToChat: "نسخ إلى الدردشة",
+         // Advanced Options Popover
+        advOptTitle: "خيارات متقدمة",
+        advOptDeepThinking: "تفكير عميق",
+        advOptInternetSearch: "بحث بالإنترنت",
+        advOptScientificMode: "وضع علمي",
+        advOptUploadFile: "رفع ملف",
+        // Misc
+        sendButtonDefault: "إرسال",
+        sendButtonUpdate: "تحديث الرسالة",
+        editMessage: "تعديل الرسالة",
+        regenerateResponse: "إعادة إنشاء الرد",
+        // Nav
+        navHome: "الرئيسية",
+        navImageStudio: "استوديو الصور",
+        navNewChat: "دردشة جديدة",
+        navProfile: "الملف الشخصي",
+        navSettings: "الإعدادات",
+    }
+};
+
 
 // --- START OF CORE CHAT AND GEMINI FUNCTIONS ---
 
@@ -265,20 +548,20 @@ Do not explicitly state these steps in your response, but use them to guide your
 
     let profileInfo = "\n\nTo help personalize your responses, remember the following about the user (use this information subtly and naturally, do not explicitly state 'I remember you like X'):";
     let hasProfileData = false;
-    if (currentUser?.displayName || profile.name) {
-        profileInfo += `\n- Their name is ${currentUser?.displayName || profile.name}. Address them by their name occasionally if it feels natural.`;
+    if (currentUser?.displayName || userProfile.name) {
+        profileInfo += `\n- Their name is ${currentUser?.displayName || userProfile.name}. Address them by their name occasionally if it feels natural.`;
         hasProfileData = true;
-    } else if (currentUser?.email && !profile.name) {
+    } else if (currentUser?.email && !userProfile.name) {
          profileInfo += `\n- You can refer to them by the first part of their email: ${currentUser.email.split('@')[0]}.`;
          hasProfileData = true;
     }
 
-    if (profile.interests && profile.interests.length > 0) { profileInfo += `\n- They are interested in: ${profile.interests.join(', ')}.`; hasProfileData = true; }
-    if (profile.preferences && Object.keys(profile.preferences).length > 0) {
-        profileInfo += `\n- Preferences: ${Object.entries(profile.preferences).map(([k,v]) => `${k}: ${v}`).join('; ')}.`;
+    if (userProfile.interests && userProfile.interests.length > 0) { profileInfo += `\n- They are interested in: ${userProfile.interests.join(', ')}.`; hasProfileData = true; }
+    if (userProfile.preferences && Object.keys(userProfile.preferences).length > 0) {
+        profileInfo += `\n- Preferences: ${Object.entries(userProfile.preferences).map(([k,v]) => `${k}: ${v}`).join('; ')}.`;
         hasProfileData = true;
     }
-    if (profile.facts && profile.facts.length > 0) { profileInfo += `\n- Other facts about them: ${profile.facts.join('; ')}.`; hasProfileData = true; }
+    if (userProfile.facts && userProfile.facts.length > 0) { profileInfo += `\n- Other facts about them: ${userProfile.facts.join('; ')}.`; hasProfileData = true; }
 
     const userMemories = savedMemories.filter(m => m.userId === currentUser?.uid);
     if (userMemories.length > 0) {
@@ -288,6 +571,16 @@ Do not explicitly state these steps in your response, but use them to guide your
         });
         hasProfileData = true;
     }
+
+    const userGeneralMemories = generalMemories.filter(m => m.userId === currentUser?.uid);
+    if (userGeneralMemories.length > 0) {
+        profileInfo += "\n\nAlso, consider these general notes the user has saved:";
+        userGeneralMemories.slice(0, 5).forEach(mem => { // Most recent 5 general
+            profileInfo += `\n- General Note: "${mem.text.substring(0,150)}${mem.text.length > 150 ? '...' : ''}" (Saved: ${new Date(mem.timestamp).toLocaleDateString()})`;
+        });
+        hasProfileData = true;
+    }
+
 
     if (hasProfileData) {
         baseInstruction += profileInfo;
@@ -360,6 +653,16 @@ function createNewChatSession() {
   }
   currentChatSessionId = null;
   currentChatIsBasedOnTool = null;
+  editingUserMessageId = null;
+  if (chatInput) chatInput.value = '';
+  if (sendButton) {
+    sendButton.innerHTML = `<svg class="feather feather-arrow-up" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><line x1="12" x2="12" y1="19" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
+    sendButton.setAttribute('aria-label', uiStrings[currentLanguage].sendButtonDefault);
+    const sendButtonTextSpan = sendButton.querySelector('span#send-button-text');
+    if (sendButtonTextSpan) sendButtonTextSpan.textContent = uiStrings[currentLanguage].sendButtonDefault;
+  }
+
+
   if (chatMessagesContainer) chatMessagesContainer.innerHTML = '';
   if (stagedFilePreviewElement && stagedFileClearButton) {
     stagedFile = null;
@@ -376,7 +679,7 @@ function createNewChatSession() {
     config: { systemInstruction }
   });
 
-  if (chatScreenTitleElement) chatScreenTitleElement.textContent = "Nova";
+  if (chatScreenTitleElement) chatScreenTitleElement.textContent = uiStrings[currentLanguage].navNewChat;
 
   const initialGreetingText = "Hello, I'm Nova, your personal AI assistant. How can I help you today?";
   const initialGreetingLang = detectMessageLanguage(initialGreetingText);
@@ -401,6 +704,16 @@ function loadChat(sessionId) {
   }
   currentChatSessionId = sessionId;
   currentChatIsBasedOnTool = session.basedOnToolId || null;
+  editingUserMessageId = null;
+  if (chatInput) chatInput.value = '';
+   if (sendButton) {
+    sendButton.innerHTML = `<svg class="feather feather-arrow-up" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><line x1="12" x2="12" y1="19" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
+    sendButton.setAttribute('aria-label', uiStrings[currentLanguage].sendButtonDefault);
+    const sendButtonTextSpan = sendButton.querySelector('span#send-button-text');
+    if (sendButtonTextSpan) sendButtonTextSpan.textContent = uiStrings[currentLanguage].sendButtonDefault;
+  }
+
+
   if (stagedFilePreviewElement && stagedFileClearButton) {
     stagedFile = null;
     updateStagedFilePreview();
@@ -456,13 +769,14 @@ function loadChat(sessionId) {
   });
 
   if (chatScreenTitleElement) {
+      let titleKey = session.title || "Nova";
       if (currentChatIsBasedOnTool) {
           const tool = customTools.find(t => t.id === currentChatIsBasedOnTool);
-          chatScreenTitleElement.textContent = tool ? `Tool: ${tool.name}` : (session.title || "Nova");
-      } else {
-          chatScreenTitleElement.textContent = session.title || "Nova";
+          titleKey = tool ? `Tool: ${tool.name}` : titleKey; // Keep existing title if tool not found
       }
+      chatScreenTitleElement.textContent = titleKey; // Directly set, assuming titles are not keys for uiStrings
   }
+
 
   session.messages.forEach(msg => {
       const lang = msg.detectedLanguage || detectMessageLanguage(msg.text);
@@ -519,19 +833,23 @@ function disableChatInput(textLoading, imageLoading) {
     isLoading = textLoading;
     isImageLoading = imageLoading;
     const anyLoading = isLoading || isImageLoading;
+    const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
 
     if (isLoading) {
         if (novaProcessingIndicatorElement) {
-            let loadingText = "Nova is processing...";
+            let loadingText = currentStrings.chatInputPlaceholder; // Default processing
             if (advancedScientificModeEnabled) {
-                loadingText = "Nova is conducting advanced research and drafting...";
+                loadingText = "Nova is conducting advanced research and drafting..."; // Specific translation needed if exists
             } else if (deepThinkingEnabled && internetSearchEnabled) {
                 loadingText = "Nova is researching and thinking deeply...";
             } else if (deepThinkingEnabled) {
                 loadingText = "Nova is thinking deeply...";
             } else if (internetSearchEnabled) {
                 loadingText = "Nova is researching...";
+            } else {
+                loadingText = "Nova is processing...";
             }
+
             novaProcessingIndicatorElement.textContent = loadingText;
             novaProcessingIndicatorElement.style.display = 'flex';
             novaProcessingIndicatorElement.classList.add('visible');
@@ -543,6 +861,7 @@ function disableChatInput(textLoading, imageLoading) {
         if (processLogVisible) startSimulatedProcessLog();
     } else if (isImageLoading) {
         if (novaImageProcessingIndicatorElement) {
+            novaImageProcessingIndicatorElement.textContent = "Nova is creating an image...";
             novaImageProcessingIndicatorElement.style.display = 'flex';
             novaImageProcessingIndicatorElement.classList.add('visible');
         }
@@ -570,7 +889,8 @@ function disableChatInput(textLoading, imageLoading) {
   if (micButton) micButton.disabled = anyLoading;
   if (codeCanvasButton) codeCanvasButton.disabled = anyLoading;
   if (generateImageChatButtonElement) generateImageChatButtonElement.disabled = anyLoading;
-  if (uploadFileButton) uploadFileButton.disabled = anyLoading;
+  if (advancedOptionsButton) advancedOptionsButton.disabled = anyLoading;
+
 
   sendButton?.classList.toggle('opacity-50', anyLoading);
   sendButton?.classList.toggle('cursor-not-allowed', anyLoading);
@@ -578,10 +898,10 @@ function disableChatInput(textLoading, imageLoading) {
   micButton?.classList.toggle('cursor-not-allowed', anyLoading && !isListening);
   codeCanvasButton?.classList.toggle('opacity-50', anyLoading);
   codeCanvasButton?.classList.toggle('cursor-not-allowed', anyLoading);
-  generateImageChatButtonElement?.classList.toggle('opacity-50', anyLoading);
+  generateImageChatButtonElement?.classList.toggle('opacity-50', anyLoading); // This element might not exist if advanced options are used
   generateImageChatButtonElement?.classList.toggle('cursor-not-allowed', anyLoading);
-  uploadFileButton?.classList.toggle('opacity-50', anyLoading);
-  uploadFileButton?.classList.toggle('cursor-not-allowed', anyLoading);
+  advancedOptionsButton?.classList.toggle('opacity-50', anyLoading);
+  advancedOptionsButton?.classList.toggle('cursor-not-allowed', anyLoading);
 }
 
 function displaySystemMessage(text, screenIdContext, lang = 'en') {
@@ -600,56 +920,121 @@ function appendMessage(senderName, textOrData, type, isStreaming = false, existi
   let messageContentHolder;
   let aiMessageContentDiv = null;
   let contentWrapperDiv;
+  let senderNameParaElement;
 
-  const language = detectedLang || detectMessageLanguage(typeof textOrData === 'string' ? textOrData : (imageData?.promptForImage || userUploadedFile?.name || ""));
+  // Determine language of the content for text direction within the bubble
+  const contentLanguage = detectedLang || detectMessageLanguage(typeof textOrData === 'string' ? textOrData : (imageData?.promptForImage || userUploadedFile?.name || ""));
   const domId = messageId || existingMessageDiv?.id || `msg-${type}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
-  if (existingMessageDiv && messageType === 'text') {
+  let messageSenderLine;
+
+  if (existingMessageDiv && (messageType === 'text' || (messageType === 'image' && !isStreaming))) {
     messageWrapper = existingMessageDiv;
-    const existingTextEl = messageWrapper.querySelector('.message-text');
-    if (existingTextEl && isStreaming) {
-        existingTextEl.innerHTML = renderMarkdownToHTML(textOrData);
-        existingTextEl.dir = language === 'ar' ? 'rtl' : 'ltr';
+    contentWrapperDiv = messageWrapper.querySelector('.user-message-content-wrapper, .ai-message-content-wrapper');
+    messageSenderLine = contentWrapperDiv?.querySelector('.message-sender-line');
+    senderNameParaElement = messageSenderLine?.querySelector('.message-sender-name');
+    const existingContentHolder = messageWrapper.querySelector('.message-text, .ai-message-image-container');
+    aiMessageContentDiv = messageWrapper.querySelector('.ai-message-content');
+
+    if (existingContentHolder) {
+        messageContentHolder = existingContentHolder;
+        if(!isStreaming || messageType === 'image') messageContentHolder.innerHTML = ''; // Clear for non-streaming updates or new image
+    } else {
+        console.error("Could not find content holder in existing message div:", domId);
+        return messageWrapper; // Or handle error more gracefully
     }
-  } else {
+     if (messageType === 'text' && isStreaming) {
+        messageContentHolder.innerHTML = renderMarkdownToHTML(textOrData);
+        // contentLanguage dir set later for messageContentHolder
+    }
+  } else { // New message
     messageWrapper = document.createElement('div');
     messageWrapper.id = domId;
+    // Base classes, justify-start/end will be added based on type for LTR-like visual positioning
     messageWrapper.className = 'flex items-end gap-3 p-4 chat-message-wrapper lg:p-5 relative group';
+    messageWrapper.dir = contentLanguage === 'ar' ? 'rtl' : 'ltr'; // For overall flex order IF specific LTR/RTL order is required and not forced LTR visual
 
     const avatarDiv = document.createElement('div');
     avatarDiv.className = 'bg-center bg-no-repeat aspect-square bg-cover rounded-full w-10 h-10 lg:w-12 lg:h-12 shrink-0 border-2 border-[#19e5c6]/50';
 
     contentWrapperDiv = document.createElement('div');
     contentWrapperDiv.className = `flex flex-1 flex-col gap-1 max-w-[85%] lg:max-w-[75%] ${type === 'user' ? 'user-message-content-wrapper' : 'ai-message-content-wrapper'}`;
+    contentWrapperDiv.style.position = 'relative'; // For potential absolute positioned elements within
 
-    const senderNamePara = document.createElement('p');
-    senderNamePara.className = 'text-[#A0E1D9] text-xs lg:text-sm font-medium leading-normal';
-    senderNamePara.textContent = senderName;
+    messageSenderLine = document.createElement('div');
+    messageSenderLine.className = 'message-sender-line flex justify-between items-center w-full mb-1';
+    // Dir for sender line will be set based on contentLanguage later
 
-    messageContentHolder = document.createElement('div');
+    senderNameParaElement = document.createElement('p');
+    senderNameParaElement.className = 'text-[#A0E1D9] text-xs lg:text-sm font-medium leading-normal message-sender-name flex-grow';
+    senderNameParaElement.textContent = senderName;
+    // Dir for sender name para will be set based on contentLanguage later
+
+    messageContentHolder = document.createElement('div'); // Generic holder for text or image content
 
     if (type === 'ai') {
-        aiMessageContentDiv = document.createElement('div');
+        aiMessageContentDiv = document.createElement('div'); // Bubble for AI
         aiMessageContentDiv.className = 'ai-message-content bg-[#1A3A35] text-white rounded-xl rounded-bl-none shadow-md overflow-hidden lg:rounded-lg';
-    } else {
-        messageContentHolder.className = 'message-text text-base lg:text-lg font-normal leading-relaxed flex rounded-xl px-4 py-3 shadow-md break-words rounded-br-none bg-[#19e5c6] text-[#0C1A18]';
+         // Removed width:fit-content from here, will be in CSS
+    } else { // User message bubble
+        // Removed 'flex' from class list
+        messageContentHolder.className = 'message-text text-base lg:text-lg font-normal leading-relaxed rounded-xl px-4 py-3 shadow-md break-words rounded-br-none bg-[#19e5c6] text-[#0C1A18]';
+        // Removed width:fit-content from here, will be in CSS
     }
 
+    // Assemble structure to achieve LTR-like visual positioning (User on right, AI on left)
+    if (type === 'user') {
+      messageWrapper.classList.add('justify-end'); // Push user message block to the screen's right
+      contentWrapperDiv.classList.add('items-end'); // Align items inside content block (name, bubble) to its end
+      avatarDiv.style.backgroundImage = `url("${USER_AVATAR_URL}")`;
+
+      // User: Content (name + bubble) then Avatar
+      messageSenderLine.appendChild(senderNameParaElement); // Name inside sender line
+      // Action buttons added later to messageSenderLine
+      contentWrapperDiv.appendChild(messageSenderLine);
+      contentWrapperDiv.appendChild(messageContentHolder); // Bubble after sender line
+      messageWrapper.appendChild(contentWrapperDiv);
+      messageWrapper.appendChild(avatarDiv);
+    } else { // AI or System message
+      messageWrapper.classList.add('justify-start'); // Push AI message block to the screen's left
+      contentWrapperDiv.classList.add('items-start');
+      avatarDiv.style.backgroundImage = `url("${AI_AVATAR_URL}")`;
+
+      if (senderName === "System") {
+         avatarDiv.style.opacity = "0.6";
+         if (aiMessageContentDiv) aiMessageContentDiv.classList.add('opacity-90', 'italic', 'bg-[#222]');
+      }
+      // AI: Avatar then Content (name + bubble)
+      messageSenderLine.appendChild(senderNameParaElement);
+      contentWrapperDiv.appendChild(messageSenderLine);
+      if(aiMessageContentDiv) {
+        aiMessageContentDiv.appendChild(messageContentHolder);
+        contentWrapperDiv.appendChild(aiMessageContentDiv);
+      } else { // Fallback, should ideally not be reached if type is 'ai'
+        contentWrapperDiv.appendChild(messageContentHolder);
+      }
+      messageWrapper.appendChild(avatarDiv);
+      messageWrapper.appendChild(contentWrapperDiv);
+    }
+    chatMessagesContainer.appendChild(messageWrapper);
+  }
+
+    // Populate content (text or image)
     if (messageType === 'text') {
         messageContentHolder.classList.add('message-text', 'text-base', 'lg:text-lg', 'font-normal', 'leading-relaxed', 'break-words');
-        if (type === 'ai' && aiMessageContentDiv) {
+        if (type === 'ai' && aiMessageContentDiv && !messageContentHolder.classList.contains('px-4')) { // Ensure AI text has padding
             messageContentHolder.classList.add('px-4', 'py-3', 'lg:px-5', 'lg:py-4');
         }
         let currentText = textOrData;
-        if (userUploadedFile) {
+        if (userUploadedFile) { // Prepend file info if it's a user message with a file
             const filePreamble = `Analyzing ${userUploadedFile.isImage ? "image" : "file"}: <i>${escapeHTML(userUploadedFile.name)}</i>.\n`;
             currentText = `${filePreamble}${textOrData}`;
-             messageContentHolder.innerHTML = renderMarkdownToHTML(currentText);
-        } else {
-            messageContentHolder.innerHTML = renderMarkdownToHTML(textOrData);
         }
-    } else if (messageType === 'image' && imageData) {
-        messageContentHolder.classList.add('ai-message-image-container', 'p-3');
+        messageContentHolder.innerHTML = renderMarkdownToHTML(currentText);
+    } else if (messageType === 'image' && imageData) { // AI generated image
+        messageContentHolder.classList.add('ai-message-image-container');
+        if(!messageContentHolder.classList.contains('p-3')) messageContentHolder.classList.add('p-3'); // Ensure padding for image container
+
         const promptPara = document.createElement('p');
         promptPara.className = 'ai-image-prompt-text text-xs text-gray-300 mb-2 px-1';
         promptPara.textContent = `Image for: "${imageData.promptForImage}"`;
@@ -671,56 +1056,38 @@ function appendMessage(senderName, textOrData, type, isStreaming = false, existi
         messageContentHolder.appendChild(downloadBtn);
     }
 
-    messageContentHolder.dir = language === 'ar' ? 'rtl' : 'ltr';
-    senderNamePara.dir = language === 'ar' ? 'rtl' : 'ltr';
+    // Set text direction for content elements based on detected content language
+    messageContentHolder.dir = contentLanguage === 'ar' ? 'rtl' : 'ltr';
+    if (senderNameParaElement) senderNameParaElement.dir = contentLanguage === 'ar' ? 'rtl' : 'ltr';
+    if (messageSenderLine) messageSenderLine.dir = contentLanguage === 'ar' ? 'rtl' : 'ltr';
 
-    if (type === 'user') {
-      messageWrapper.classList.add('justify-end');
-      contentWrapperDiv.classList.add('items-end');
-      avatarDiv.style.backgroundImage = `url("${USER_AVATAR_URL}")`;
-      contentWrapperDiv.appendChild(senderNamePara);
-      contentWrapperDiv.appendChild(messageContentHolder);
-      messageWrapper.appendChild(contentWrapperDiv);
-      messageWrapper.appendChild(avatarDiv);
-    } else {
-      messageWrapper.classList.add('justify-start');
-      contentWrapperDiv.classList.add('items-start');
-      avatarDiv.style.backgroundImage = `url("${AI_AVATAR_URL}")`;
-      if (senderName === "System") {
-         avatarDiv.style.opacity = "0.6";
-         if (aiMessageContentDiv) aiMessageContentDiv.classList.add('opacity-90', 'italic', 'bg-[#222]');
-         else messageContentHolder.classList.add('opacity-90', 'italic');
-      }
-      contentWrapperDiv.appendChild(senderNamePara);
-      if(aiMessageContentDiv) {
-        aiMessageContentDiv.appendChild(messageContentHolder);
-        contentWrapperDiv.appendChild(aiMessageContentDiv);
-      } else {
-        contentWrapperDiv.appendChild(messageContentHolder);
-      }
-      messageWrapper.appendChild(avatarDiv);
-      messageWrapper.appendChild(contentWrapperDiv);
-    }
-    chatMessagesContainer.appendChild(messageWrapper);
-  }
 
+  // --- Render Sources (for AI text messages) ---
   if (type === 'ai' && messageType === 'text' && sources && sources.length > 0 && chatMessagesContainer) {
     const sourcesContainerId = domId + '-sources';
     let sourcesContainer = document.getElementById(sourcesContainerId);
-    if (!sourcesContainer) {
+    if (!sourcesContainer) { // Create if doesn't exist
         sourcesContainer = document.createElement('div');
         sourcesContainer.id = sourcesContainerId;
-        sourcesContainer.className = 'chat-message-external-sources ml-[calc(2.5rem+0.75rem)] mr-4 my-1 p-2 bg-[#102824] rounded-md text-xs';
-        if (language === 'ar') sourcesContainer.dir = 'rtl';
+        // Adjust margin to align with AI text bubble, considering forced LTR visual positioning
+        sourcesContainer.className = 'chat-message-external-sources ml-[calc(3rem+0.75rem)] mr-4 my-1 p-2 bg-[#102824] rounded-md text-xs'; // LTR default like
+        if (contentLanguage === 'ar') { // content of sources might be RTL
+             sourcesContainer.dir = 'rtl';
+             // If AI messages are forced left, sources are also on left. Margin might need RTL adjustment if it's not based on page dir.
+             // Given AI is forced left, this margin should be fine.
+        } else {
+            sourcesContainer.dir = 'ltr';
+        }
+
         if (messageWrapper.nextSibling) {
             chatMessagesContainer.insertBefore(sourcesContainer, messageWrapper.nextSibling);
         } else {
             chatMessagesContainer.appendChild(sourcesContainer);
         }
     }
-    sourcesContainer.innerHTML = '';
+    sourcesContainer.innerHTML = ''; // Clear previous sources if any (e.g., from streaming updates)
     const sourcesHeading = document.createElement('h4');
-    sourcesHeading.textContent = language === 'ar' ? "المصادر:" : "Sources:";
+    sourcesHeading.textContent = contentLanguage === 'ar' ? "المصادر:" : "Sources:";
     sourcesHeading.className = "text-[#A0E1D9] font-semibold mb-1";
     sourcesContainer.appendChild(sourcesHeading);
     const ol = document.createElement('ol');
@@ -739,35 +1106,64 @@ function appendMessage(senderName, textOrData, type, isStreaming = false, existi
             const domain = new URL(source.uri).hostname.replace(/^www\./, '');
             const domainSpan = document.createElement('span');
             domainSpan.className = 'source-domain text-gray-400 ml-1';
+            if (contentLanguage === 'ar') domainSpan.classList.replace('ml-1', 'mr-1');
             domainSpan.textContent = `(${domain})`;
             li.appendChild(domainSpan);
-        } catch (e) {}
+        } catch (e) { /* ignore invalid URL for domain extraction */ }
         ol.appendChild(li);
     });
     sourcesContainer.appendChild(ol);
-    if (processLogVisible) {
-        sources.forEach(source => addProcessLogEntry(`Source: ${source.title || source.uri}`, 'source', source.uri));
-    }
-  } else if (type === 'ai' && (!sources || sources.length === 0) && chatMessagesContainer) {
+    if (processLogVisible) { sources.forEach(source => addProcessLogEntry(`Source: ${source.title || source.uri}`, 'source', source.uri));}
+  } else if (type === 'ai' && (!sources || sources.length === 0) && chatMessagesContainer) { // No sources or sources removed
     const sourcesContainerId = domId + '-sources';
     const existingSourcesContainer = document.getElementById(sourcesContainerId);
-    if (existingSourcesContainer) {
-        existingSourcesContainer.remove();
+    if (existingSourcesContainer) existingSourcesContainer.remove();
+  }
+
+
+  // Add Edit/Regenerate buttons to messageSenderLine
+  let headerActionsContainer = messageSenderLine?.querySelector('.message-actions-header');
+  if (!headerActionsContainer && messageSenderLine) {
+      headerActionsContainer = document.createElement('div');
+      headerActionsContainer.className = 'message-actions-header flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0'; // shrink-0 important
+      messageSenderLine.appendChild(headerActionsContainer); // Add to end of sender line (will be positioned by justify-between)
+  }
+  if(headerActionsContainer) headerActionsContainer.innerHTML = ''; // Clear previous
+
+  if (!isInitialSystemMessage && senderName !== "System" && headerActionsContainer) {
+    if (type === 'user') {
+        const editButton = document.createElement('button');
+        editButton.className = 'message-edit-btn p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5';
+        editButton.setAttribute('aria-label', uiStrings[currentLanguage].editMessage);
+        editButton.innerHTML = `<span class="material-symbols-outlined text-sm text-gray-500 dark:text-gray-400 group-hover:text-[#19e5c6]">edit</span>`;
+        editButton.dataset.messageId = domId;
+        editButton.onclick = (e) => { e.stopPropagation(); handleEditUserMessage(domId); };
+        headerActionsContainer.appendChild(editButton);
+    } else if (type === 'ai') {
+        const regenerateButton = document.createElement('button');
+        regenerateButton.className = 'message-regenerate-btn p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5';
+        regenerateButton.setAttribute('aria-label', uiStrings[currentLanguage].regenerateResponse);
+        regenerateButton.innerHTML = `<span class="material-symbols-outlined text-sm text-gray-500 dark:text-gray-400 group-hover:text-[#19e5c6]">refresh</span>`;
+        regenerateButton.dataset.messageId = domId;
+        regenerateButton.onclick = (e) => { e.stopPropagation(); handleRegenerateAiResponse(domId); };
+        headerActionsContainer.appendChild(regenerateButton);
     }
   }
 
+
+  // Add action buttons (Copy, Continue, etc.) for AI messages
   if (type === 'ai' && !isStreaming && !isInitialSystemMessage && senderName !== "System" && aiMessageContentDiv) {
       let actionsContainer = messageWrapper.querySelector('.message-actions-container');
       if (!actionsContainer) {
           actionsContainer = document.createElement('div');
           actionsContainer.className = 'message-actions-container mt-2';
           if (contentWrapperDiv && aiMessageContentDiv.parentNode === contentWrapperDiv) {
-              contentWrapperDiv.appendChild(actionsContainer);
-          } else {
+              contentWrapperDiv.appendChild(actionsContainer); // Append after AI bubble
+          } else { // Fallback, should not happen with new structure
                messageWrapper.appendChild(actionsContainer);
           }
       }
-      actionsContainer.innerHTML = '';
+      actionsContainer.innerHTML = ''; // Clear existing buttons if re-rendering
 
       const copyButton = document.createElement('button');
       copyButton.className = 'message-action-btn copy-answer-btn';
@@ -866,7 +1262,17 @@ function appendMessage(senderName, textOrData, type, isStreaming = false, existi
                       const element = document.createElement('div');
                       element.innerHTML = resumeHtmlContent;
                       const style = document.createElement('style');
-                      style.innerHTML = `body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; } h1, h2, h3 { color: #19e5c6; margin-bottom: 0.5em; } h1 { font-size: 24px; border-bottom: 2px solid #19e5c6; padding-bottom: 0.3em; } h2 { font-size: 18px; margin-top: 1em; } h3 { font-size: 16px; font-style: italic; } ul { list-style-type: disc; margin-left: 20px; } p { margin-bottom: 0.5em; } .section { margin-bottom: 1.5em; } .contact-info { margin-bottom: 1em; text-align: center; }`;
+                      style.innerHTML = `
+                          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                          h1, h2, h3 { color: #19e5c6; margin-bottom: 0.5em; }
+                          h1 { font-size: 24px; border-bottom: 2px solid #19e5c6; padding-bottom: 0.3em; }
+                          h2 { font-size: 18px; margin-top: 1em; }
+                          h3 { font-size: 16px; font-style: italic; }
+                          ul { list-style-type: disc; margin-left: 20px; }
+                          p { margin-bottom: 0.5em; }
+                          .section { margin-bottom: 1.5em; }
+                          .contact-info { margin-bottom: 1em; text-align: center; }
+                      `;
                       element.prepend(style);
                       html2pdf().from(element).set({
                           margin: 15,
@@ -885,6 +1291,7 @@ function appendMessage(senderName, textOrData, type, isStreaming = false, existi
       }
   }
 
+  // --- Save to Chat History (if not streaming and not initial system message) ---
   if (!isStreaming && !isInitialSystemMessage && senderName !== "System") {
     let textForHistory;
     if (messageType === 'image' && imageData) {
@@ -902,7 +1309,7 @@ function appendMessage(senderName, textOrData, type, isStreaming = false, existi
         text: textForHistory,
         timestamp: Date.now(),
         sources: (type === 'ai' && messageType === 'text' && sources) ? sources : undefined,
-        detectedLanguage: language,
+        detectedLanguage: contentLanguage, // Use contentLanguage
         messageType: messageType,
         imageData: messageType === 'image' ? imageData : undefined,
         userUploadedFile: userUploadedFile || undefined
@@ -912,32 +1319,33 @@ function appendMessage(senderName, textOrData, type, isStreaming = false, existi
       const session = chatSessions.find(s => s.id === currentChatSessionId);
       if (session) {
         const existingMsgIndex = session.messages.findIndex(m => m.id === msgToSave.id);
-        if (existingMsgIndex !== -1) {
+        if (existingMsgIndex !== -1) { // Should ideally not happen if IDs are unique for new messages
             session.messages[existingMsgIndex] = msgToSave;
         } else {
             session.messages.push(msgToSave);
         }
         session.lastUpdated = Date.now();
       }
-    } else if (type === 'user' && currentUser) {
+    } else if (type === 'user' && currentUser) { // First user message in a new chat
       currentChatSessionId = `session-${Date.now()}`;
       const toolForTitle = currentChatIsBasedOnTool ? customTools.find(t=>t.id === currentChatIsBasedOnTool) : null;
       const newSession = {
         id: currentChatSessionId,
-        title: currentChatIsBasedOnTool ? `Tool: ${toolForTitle?.name || 'Unnamed Tool'}` : "New Chat...",
-        messages: [msgToSave],
+        title: currentChatIsBasedOnTool ? `Tool: ${toolForTitle?.name || 'Unnamed Tool'}` : "New Chat...", // Placeholder title
+        messages: [msgToSave], // Add the first user message
         lastUpdated: Date.now(),
-        aiToneUsed: currentAiTone,
+        aiToneUsed: currentAiTone, // Store the tone used for this session
         basedOnToolId: currentChatIsBasedOnTool || undefined
       };
       chatSessions.push(newSession);
       if (chatScreenTitleElement) chatScreenTitleElement.textContent = newSession.title;
     }
     saveChatSessionsToLocalStorage();
-    if (currentScreen === CHAT_LIST_SCREEN_ID || currentScreen === CHAT_SCREEN_ID) {
+    if (currentScreen === CHAT_LIST_SCREEN_ID || currentScreen === CHAT_SCREEN_ID) { // Update list if visible
         renderChatList();
     }
   }
+
   scrollToBottomChat();
   return messageWrapper;
 }
@@ -954,19 +1362,32 @@ function renderMarkdownToHTML(markdownText) {
         const trimmedRawCode = rawCode.trim();
         const escapedCodeForDisplay = escapeHTML(trimmedRawCode);
         const escapedCodeForDataAttr = escapeHTML(trimmedRawCode);
-        const toolbarHtml = `<div class="code-block-toolbar">${lang ? `<span class="code-block-lang">${escapeHTML(lang.trim())}</span>` : ''}<button class="copy-code-btn" data-code="${escapedCodeForDataAttr}" aria-label="Copy code snippet"><span class="material-symbols-outlined">content_copy</span><span>Copy</span></button><button class="preview-code-btn" data-code="${escapedCodeForDataAttr}" aria-label="Preview code snippet in canvas"><span class="material-symbols-outlined">play_circle</span><span>Preview</span></button></div>`;
-        const codeBlockHtml = `<div class="code-block-wrapper">${toolbarHtml}<pre class="${languageClass}"><code class="${languageClass}">${escapedCodeForDisplay}</code></pre></div>`;
+        const toolbarHtml = `
+            <div class="code-block-toolbar">
+                ${lang ? `<span class="code-block-lang">${escapeHTML(lang.trim())}</span>` : ''}
+                <button class="copy-code-btn" data-code="${escapedCodeForDataAttr}" aria-label="Copy code snippet">
+                    <span class="material-symbols-outlined">content_copy</span>
+                    <span>Copy</span>
+                </button>
+                <button class="preview-code-btn" data-code="${escapedCodeForDataAttr}" aria-label="Preview code snippet in canvas">
+                    <span class="material-symbols-outlined">play_circle</span>
+                    <span>Preview</span>
+                </button>
+            </div>`;
+        const codeBlockHtml = `
+            <div class="code-block-wrapper">
+                ${toolbarHtml}
+                <pre class="${languageClass}"><code class="${languageClass}">${escapedCodeForDisplay}</code></pre>
+            </div>`;
         codeBlockPlaceholders.push(codeBlockHtml);
         return `%%CODEBLOCK_WRAPPER_${codeBlockPlaceholders.length - 1}%%`;
     });
-
     const inlineCodes = [];
     html = html.replace(/`([^`]+)`/g, (match, code) => {
         inlineCodes.push(`<code>${escapeHTML(code)}</code>`);
         return `%%INLINECODE_${inlineCodes.length - 1}%%`;
     });
     html = escapeHTML(html);
-
     html = html.replace(/^\|(.+)\|\r?\n\|([\s\S]+?)\|\r?\n((?:\|.*\|\r?\n?)*)/gm, (tableMatch) => {
         const rows = tableMatch.trim().split(/\r?\n/);
         if (rows.length < 2) return tableMatch;
@@ -989,7 +1410,6 @@ function renderMarkdownToHTML(markdownText) {
         tableHtml += '</tbody></table></div>';
         return tableHtml;
     });
-
     html = html.replace(/^###### (.*$)/gim, '<h6>$1</h6>');
     html = html.replace(/^##### (.*$)/gim, '<h5>$1</h5>');
     html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
@@ -1008,12 +1428,12 @@ function renderMarkdownToHTML(markdownText) {
     html = html.replace(/^\s*(\d+)\. +(.*)/gm, (match, number, item) => `%%OL_START%%<li>${item.trim()}</li>`);
     html = html.replace(/(%%OL_START%%(<li>.*?<\/li>)+)/g, '<ol>$2</ol>');
     html = html.replace(/<\/ol>\s*<ol>/g, '');
-
     html = html.split(/\r?\n/).map(paragraph => {
       paragraph = paragraph.trim();
       if (!paragraph) return '';
       if (paragraph.match(/^<\/?(h[1-6]|ul|ol|li|blockquote|hr|table|div class="table-wrapper"|div class="code-block-wrapper")/) ||
-          paragraph.startsWith('%%CODEBLOCK_WRAPPER_') || paragraph.startsWith('%%INLINECODE_') ||
+          paragraph.startsWith('%%CODEBLOCK_WRAPPER_') ||
+          paragraph.startsWith('%%INLINECODE_') ||
           paragraph.startsWith('%%UL_START%%') || paragraph.startsWith('%%OL_START%%')) {
           return paragraph;
       }
@@ -1021,7 +1441,6 @@ function renderMarkdownToHTML(markdownText) {
     }).join('');
     html = html.replace(/%%UL_START%%<li>(.*?)<\/li>/g, '<ul><li>$1</li></ul>');
     html = html.replace(/%%OL_START%%<li>(.*?)<\/li>/g, '<ol><li>$1</li></ol>');
-
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
         const decodedText = text;
         const decodedUrl = url.replace(/&amp;/g, '&');
@@ -1033,10 +1452,8 @@ function renderMarkdownToHTML(markdownText) {
     html = html.replace(/(^|[^\*])\*([^\*]+)\*([^\*]|$)/g, '$1<em>$2</em>$3');
     html = html.replace(/(^|[^_])_([^_]+)_([^_]|$)/g, '$1<em>$2</em>$3');
     html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
-
     html = html.replace(/%%INLINECODE_(\d+)%%/g, (match, index) => inlineCodes[parseInt(index)]);
     html = html.replace(/%%CODEBLOCK_WRAPPER_(\d+)%%/g, (match, index) => codeBlockPlaceholders[parseInt(index)]);
-
     html = html.replace(/<p>\s*<\/p>/g, '');
     html = html.replace(/<p><br\s*\/?>\s*<\/p>/g, '');
     html = html.replace(/(\r?\n)+/g, '\n');
@@ -1045,31 +1462,38 @@ function renderMarkdownToHTML(markdownText) {
     return html.trim();
 }
 
-async function handleSendMessage() {
+
+async function handleSendMessage(isRegeneration = false, regeneratedAiMessageId = null) {
   if (!currentUser) {
       displaySystemMessage("Please sign in to send messages.", CHAT_SCREEN_ID);
       showScreen(SIGNIN_SCREEN_ID);
       return;
   }
-  if (isLoading || isImageLoading || !chatInput) return;
+  if ((isLoading || isImageLoading) && !isRegeneration) return;
+  if (!chatInput) return;
+
   let userMessageText = chatInput.value.trim();
   let currentStagedFile = stagedFile;
-  if (!userMessageText && !currentStagedFile) {
-    if (chatInput) chatInput.placeholder = "Please type a message or upload a file.";
+  const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
+
+  if (!userMessageText && !currentStagedFile && !editingUserMessageId) {
+    if (chatInput) chatInput.placeholder = currentStrings.chatInputPlaceholder;
     return;
   }
-  if (chatInput) chatInput.placeholder = "Ask Nova anything...";
+  if (chatInput && !editingUserMessageId) chatInput.placeholder = currentStrings.chatInputPlaceholder;
+
 
   if (!geminiInitialized && !initializeGeminiSDK()) {
     displaySystemMessage("AI Service is not ready. Message not sent.", CHAT_SCREEN_ID);
     return;
   }
 
-  const userMessageId = `msg-user-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
+  const isEditing = !!editingUserMessageId;
+  let userMessageId = isEditing ? editingUserMessageId : `msg-user-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
   let fullMessageForDisplay = userMessageText;
   const geminiMessageParts = [];
 
-  if (currentStagedFile) {
+  if (currentStagedFile && !isEditing) {
     if (currentStagedFile.type === 'image') {
         geminiMessageParts.push({ inlineData: { mimeType: currentStagedFile.mimeType, data: currentStagedFile.content } });
         fullMessageForDisplay = `[Image: ${currentStagedFile.name}] ${userMessageText}`.trim();
@@ -1091,37 +1515,97 @@ async function handleSendMessage() {
   }
 
   const userMessageLang = detectMessageLanguage(userMessageText || (currentStagedFile?.name || ""));
-  if (currentChatIsBasedOnTool && !currentChatSessionId) {
+
+  if (isEditing) {
+    const existingMsgDiv = document.getElementById(editingUserMessageId);
+    const msgTextElement = existingMsgDiv?.querySelector('.message-text');
+    if (msgTextElement) msgTextElement.innerHTML = renderMarkdownToHTML(userMessageText);
+
+    const session = chatSessions.find(s => s.id === currentChatSessionId);
+    if (session) {
+        const msgIndex = session.messages.findIndex(m => m.id === editingUserMessageId);
+        if (msgIndex !== -1) {
+            session.messages[msgIndex].text = userMessageText;
+            session.messages[msgIndex].detectedLanguage = userMessageLang;
+            session.messages.splice(msgIndex + 1);
+            let nextSibling = existingMsgDiv?.nextElementSibling;
+            while(nextSibling && (nextSibling.classList.contains('chat-message-wrapper') || nextSibling.classList.contains('chat-message-external-sources'))) {
+                const toRemove = nextSibling;
+                nextSibling = nextSibling.nextElementSibling;
+                toRemove.remove();
+            }
+        }
+        const historyForEdit = session.messages
+            .filter((msg, idx) => msg.sender !== 'System' && idx < msgIndex)
+            .map(msg => ({
+                role: (msg.sender === "User") ? "user" : "model",
+                parts: [{text: msg.text.replace(/\[(Image|File):.*?\]\s*/, '')}]
+            }));
+
+        const systemInstruction = getSystemInstruction(currentAiTone, userProfile, deepThinkingEnabled, internetSearchEnabled, !!currentChatIsBasedOnTool, advancedScientificModeEnabled);
+        geminiChat = ai.chats.create({ model: TEXT_MODEL_NAME, history: historyForEdit, config: { systemInstruction } });
+    }
+    if (chatInput) chatInput.value = "";
+    editingUserMessageId = null;
+    if (sendButton) {
+        sendButton.innerHTML = `<svg class="feather feather-arrow-up" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><line x1="12" x2="12" y1="19" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
+        sendButton.setAttribute('aria-label', currentStrings.sendButtonDefault);
+        const sendButtonTextSpan = sendButton.querySelector('span#send-button-text');
+        if (sendButtonTextSpan) sendButtonTextSpan.remove(); // Remove text span
+    }
+     if (chatInput) chatInput.placeholder = currentStrings.chatInputPlaceholder;
+  } else if (!isRegeneration) {
+      appendMessage("User", fullMessageForDisplay, 'user', false, null, false, null, userMessageLang, userMessageId, 'text', undefined, currentStagedFile ? {name: currentStagedFile.name, type: currentStagedFile.type, isImage: currentStagedFile.type === 'image'} : undefined);
+      if (chatInput) chatInput.value = "";
+      stagedFile = null;
+      updateStagedFilePreview();
+  }
+
+
+  if (currentChatIsBasedOnTool && !currentChatSessionId && !isEditing && !isRegeneration) {
         currentChatSessionId = `session-tool-${currentChatIsBasedOnTool}-${Date.now()}`;
         const tool = customTools.find(t => t.id === currentChatIsBasedOnTool);
-        const newSession = { id: currentChatSessionId, title: tool ? `Tool: ${tool.name}` : "Tool Chat", messages: [], lastUpdated: Date.now(), aiToneUsed: currentAiTone, basedOnToolId: currentChatIsBasedOnTool };
+        const newSession = {
+            id: currentChatSessionId,
+            title: tool ? `Tool: ${tool.name}` : "Tool Chat",
+            messages: [],
+            lastUpdated: Date.now(),
+            aiToneUsed: currentAiTone,
+            basedOnToolId: currentChatIsBasedOnTool
+        };
         chatSessions.push(newSession);
         if (chatScreenTitleElement) chatScreenTitleElement.textContent = newSession.title;
-  } else if (!geminiChat || !currentChatSessionId) {
+  } else if ((!geminiChat || !currentChatSessionId) && !isEditing && !isRegeneration) {
     const systemInstruction = getSystemInstruction(currentAiTone, userProfile, deepThinkingEnabled, internetSearchEnabled, false, advancedScientificModeEnabled);
-    geminiChat = ai.chats.create({ model: TEXT_MODEL_NAME, config: { systemInstruction } });
+    geminiChat = ai.chats.create({
+        model: TEXT_MODEL_NAME,
+        config: { systemInstruction }
+    });
      if (!currentChatSessionId) {
         currentChatSessionId = `session-${Date.now()}`;
-        const newSession = { id: currentChatSessionId, title: "New Chat...", messages: [], lastUpdated: Date.now(), aiToneUsed: currentAiTone };
+        const newSession = {
+            id: currentChatSessionId,
+            title: currentStrings.navNewChat,
+            messages: [],
+            lastUpdated: Date.now(),
+            aiToneUsed: currentAiTone,
+        };
         chatSessions.push(newSession);
         if (chatScreenTitleElement) chatScreenTitleElement.textContent = newSession.title;
      }
   }
 
-  appendMessage("User", fullMessageForDisplay, 'user', false, null, false, null, userMessageLang, userMessageId, 'text', undefined, currentStagedFile ? {name: currentStagedFile.name, type: currentStagedFile.type, isImage: currentStagedFile.type === 'image'} : undefined);
-  if (chatInput) chatInput.value = "";
-  stagedFile = null;
-  updateStagedFilePreview();
   disableChatInput(true, false);
 
-  let aiMessageDiv = null;
+  let aiMessageDivToUpdate = isRegeneration ? document.getElementById(regeneratedAiMessageId) : null;
   let fullResponseText = "";
   let isFirstAIMessageInNewChat = false;
   let groundingSources = null;
   let aiResponseLang = 'unknown';
-  const aiMessageId = `msg-ai-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
+  const aiMessageId = isRegeneration ? regeneratedAiMessageId : `msg-ai-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
 
-  if (currentChatSessionId) {
+
+  if (currentChatSessionId && !isEditing && !isRegeneration) {
     const session = chatSessions.find(s => s.id === currentChatSessionId);
     if (session && session.messages.filter(m => m.sender === 'Nova' || m.sender === 'Nova (Tool Mode)').length === 0) {
         isFirstAIMessageInNewChat = true;
@@ -1129,7 +1613,10 @@ async function handleSendMessage() {
   }
 
   try {
-    const sendMessageParams = { message: geminiMessageParts };
+    const sendMessageParams = {
+        message: geminiMessageParts
+    };
+
     const perMessageConfig = {};
     let configApplied = false;
 
@@ -1137,22 +1624,28 @@ async function handleSendMessage() {
         perMessageConfig.tools = [{ googleSearch: {} }];
         configApplied = true;
     }
+
     if (TEXT_MODEL_NAME === 'gemini-2.5-flash-preview-04-17') {
       if (!deepThinkingEnabled && !advancedScientificModeEnabled && (voiceModeActive || currentCreativityLevel === 'focused')) {
         perMessageConfig.thinkingConfig = { thinkingBudget: 0 };
         configApplied = true;
       }
     }
+
     switch(currentCreativityLevel) {
         case 'focused': perMessageConfig.temperature = 0.2; configApplied = true; break;
         case 'balanced': perMessageConfig.temperature = 0.7; configApplied = true; break;
         case 'inventive': perMessageConfig.temperature = 1.0; configApplied = true; break;
     }
+
+
     if (configApplied) {
         sendMessageParams.config = perMessageConfig;
     }
 
     const result = await geminiChat.sendMessageStream(sendMessageParams);
+    let tempAiMessageDiv = aiMessageDivToUpdate;
+
     for await (const chunk of result) {
       const chunkText = chunk.text;
       if (chunkText) {
@@ -1161,25 +1654,27 @@ async function handleSendMessage() {
             aiResponseLang = detectMessageLanguage(fullResponseText);
         }
         const aiSenderName = currentChatIsBasedOnTool ? "Nova (Tool Mode)" : "Nova";
-        if (!aiMessageDiv) {
-          aiMessageDiv = appendMessage(aiSenderName, fullResponseText, 'ai', true, null, false, null, aiResponseLang, aiMessageId, 'text');
+        if (!tempAiMessageDiv) {
+          tempAiMessageDiv = appendMessage(aiSenderName, fullResponseText, 'ai', true, null, false, null, aiResponseLang, aiMessageId, 'text');
         } else {
-          appendMessage(aiSenderName, fullResponseText, 'ai', true, aiMessageDiv, false, null, aiResponseLang, aiMessageId, 'text');
+          appendMessage(aiSenderName, fullResponseText, 'ai', true, tempAiMessageDiv, false, null, aiResponseLang, aiMessageId, 'text');
         }
         scrollToBottomChat();
       }
+
       if (chunk.candidates && chunk.candidates[0]?.groundingMetadata?.groundingChunks) {
           const newSources = chunk.candidates[0].groundingMetadata.groundingChunks
               .map(gc => ({ uri: gc.web?.uri || gc.retrievedContext?.uri || '', title: gc.web?.title || gc.retrievedContext?.uri || '' }))
               .filter(s => s.uri);
+
           if (newSources.length > 0) {
               groundingSources = [...(groundingSources || []), ...newSources].reduce((acc, current) => {
-                  if (!acc.find(item => item.uri === current.uri)) acc.push(current);
+                  if (!acc.find(item => item.uri === current.uri)) { acc.push(current); }
                   return acc;
               }, []);
-              if (aiMessageDiv && groundingSources && groundingSources.length > 0) {
+              if (tempAiMessageDiv && groundingSources && groundingSources.length > 0) {
                 const aiSenderName = currentChatIsBasedOnTool ? "Nova (Tool Mode)" : "Nova";
-                appendMessage(aiSenderName, fullResponseText, 'ai', true, aiMessageDiv, false, groundingSources, aiResponseLang, aiMessageId, 'text');
+                appendMessage(aiSenderName, fullResponseText, 'ai', true, tempAiMessageDiv, false, groundingSources, aiResponseLang, aiMessageId, 'text');
               }
               if (processLogVisible && groundingSources && groundingSources.length > 0) {
                     newSources.forEach(source => addProcessLogEntry(`Found source: ${source.title || source.uri}`, 'source', source.uri));
@@ -1189,7 +1684,9 @@ async function handleSendMessage() {
     }
 
     if (ttsEnabled && fullResponseText) {
-        const textForSpeech = fullResponseText.replace(/<br\s*\/?>/gi, "\n").replace(/<p.*?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]+(>|$)/g, "").replace(/\n\s*\n/g, "\n").trim();
+        const textForSpeech = fullResponseText
+            .replace(/<br\s*\/?>/gi, "\n").replace(/<p.*?>/gi, "\n").replace(/<\/p>/gi, "\n")
+            .replace(/<[^>]+(>|$)/g, "").replace(/\n\s*\n/g, "\n").trim();
         speak(textForSpeech, true, aiResponseLang);
     }
 
@@ -1197,11 +1694,12 @@ async function handleSendMessage() {
         const session = chatSessions.find(s => s.id === currentChatSessionId);
         if (session) {
             const aiSenderName = currentChatIsBasedOnTool ? "Nova (Tool Mode)" : "Nova";
-             if (aiMessageDiv) {
-                appendMessage(aiSenderName, fullResponseText, 'ai', false, aiMessageDiv, false, groundingSources, aiResponseLang, aiMessageId, 'text');
+             if (tempAiMessageDiv) {
+                appendMessage(aiSenderName, fullResponseText, 'ai', false, tempAiMessageDiv, false, groundingSources, aiResponseLang, aiMessageId, 'text');
             } else {
                 appendMessage(aiSenderName, fullResponseText, 'ai', false, null, false, groundingSources, aiResponseLang, aiMessageId, 'text');
             }
+
             if (isFirstAIMessageInNewChat && !session.basedOnToolId) {
                 const userMsgForTitle = session.messages.find(m => m.sender === 'User')?.text || fullMessageForDisplay;
                 const newTitle = await generateChatTitle(userMsgForTitle, fullResponseText);
@@ -1210,17 +1708,21 @@ async function handleSendMessage() {
                  saveChatSessionsToLocalStorage();
                  renderChatList();
             }
-            if (!session.basedOnToolId) {
+            if (!session.basedOnToolId && !advancedScientificModeEnabled) { // Avoid info extraction for tools or scientific mode
                  await extractAndStoreUserInfo(session);
             }
         }
     }
+
   } catch (error) {
     console.error("Error sending message to Gemini:", error);
     let errorMessage = "Sorry, I encountered an error processing your request. Please try again.";
     if (error && error.message) {
-        if (error.message.includes("API key not valid")) errorMessage = "There's an issue with the API configuration. Please contact support.";
-        else if (error.message.toLowerCase().includes("safety") || error.message.includes(" हिंसात्मक ")) errorMessage = "Your request could not be processed due to safety guidelines. Please rephrase your message.";
+        if (error.message.includes("API key not valid")) {
+            errorMessage = "There's an issue with the API configuration. Please contact support.";
+        } else if (error.message.toLowerCase().includes("safety") || error.message.includes(" हिंसात्मक ")) {
+             errorMessage = "Your request could not be processed due to safety guidelines. Please rephrase your message.";
+        }
     }
     const errLang = detectMessageLanguage(errorMessage);
     const errorMsgId = `err-${aiMessageId}`;
@@ -1236,6 +1738,100 @@ async function handleSendMessage() {
          handleMicInput();
     }
   }
+}
+
+
+async function handleGenerateImageInChat() {
+    if (!currentUser) {
+      displaySystemMessage("Please sign in to generate images.", CHAT_SCREEN_ID);
+      showScreen(SIGNIN_SCREEN_ID);
+      return;
+    }
+    if (isLoading || isImageLoading || !chatInput) return;
+    const prompt = chatInput.value.trim();
+    if (!prompt) {
+        displaySystemMessage("Please enter a prompt for the image.", CHAT_SCREEN_ID, 'en');
+        return;
+    }
+
+    if (!geminiInitialized && !initializeGeminiSDK()) {
+      displaySystemMessage("AI Service not ready for image generation.", CHAT_SCREEN_ID, 'en');
+      return;
+    }
+
+    const userMessageLang = detectMessageLanguage(prompt);
+    const userMessageId = `msg-user-imgprompt-${Date.now()}`;
+    appendMessage("User", prompt, 'user', false, null, false, null, userMessageLang, userMessageId, 'text');
+    chatInput.value = "";
+    disableChatInput(false, true);
+
+    const aiImageId = `msg-ai-img-${Date.now()}`;
+
+    try {
+        const response = await ai.models.generateImages({
+            model: IMAGE_MODEL_NAME,
+            prompt: prompt,
+            config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: "1:1" },
+        });
+
+        if (response.generatedImages && response.generatedImages.length > 0) {
+            const imgData = response.generatedImages[0];
+            const imageDataPayload = {
+                base64: imgData.image.imageBytes,
+                mimeType: imgData.image.mimeType || 'image/jpeg',
+                promptForImage: prompt
+            };
+            appendMessage("Nova", "", 'ai', false, null, false, null, 'en', aiImageId, 'image', imageDataPayload);
+            if (currentChatSessionId) {
+                const session = chatSessions.find(s => s.id === currentChatSessionId);
+                if (session) {
+                    const aiImageMessageForHistory = {
+                        id: aiImageId,
+                        sender: 'Nova',
+                        text: `[AI generated image for prompt: ${prompt.substring(0,50)}...]`,
+                        timestamp: Date.now(),
+                        messageType: 'image',
+                        imageData: imageDataPayload,
+                        detectedLanguage: 'en'
+                    };
+                    session.messages.push(aiImageMessageForHistory);
+                    session.lastUpdated = Date.now();
+                    saveChatSessionsToLocalStorage();
+                    renderChatList();
+                }
+            } else {
+                currentChatSessionId = `session-img-${Date.now()}`;
+                const newSession = {
+                    id: currentChatSessionId,
+                    title: `Image: ${prompt.substring(0,20)}...`,
+                    messages: [
+                        { id: userMessageId, sender: 'User', text: prompt, timestamp: Date.now()-100, detectedLanguage: userMessageLang, messageType: 'text'},
+                        { id: aiImageId, sender: 'Nova', text: `[AI image for: ${prompt.substring(0,50)}...]`, timestamp: Date.now(), messageType: 'image', imageData: imageDataPayload, detectedLanguage: 'en' }
+                    ],
+                    lastUpdated: Date.now(),
+                    aiToneUsed: currentAiTone,
+                };
+                chatSessions.push(newSession);
+                if (chatScreenTitleElement) chatScreenTitleElement.textContent = newSession.title;
+                saveChatSessionsToLocalStorage();
+                renderChatList();
+            }
+        } else {
+            displaySystemMessage("Sorry, I couldn't generate an image for that prompt. Please try a different prompt or check the image model.", CHAT_SCREEN_ID, 'en');
+        }
+
+    } catch (error) {
+        console.error("Error generating image in chat:", error);
+        let errMsg = "Failed to generate image. Please try again.";
+        if (error instanceof Error) errMsg = `Image Generation Error: ${error.message}`;
+        if (error.message && (error.message.toLowerCase().includes("safety") || error.message.includes("प्रोम्प्ट में मौजूद नहीं किया जा सका"))) {
+            errMsg = "The image could not be generated due to safety guidelines. Please try a different prompt.";
+        }
+        displaySystemMessage(errMsg, CHAT_SCREEN_ID, 'en');
+    } finally {
+        disableChatInput(false, false);
+        if (chatInput && !voiceModeActive) chatInput.focus();
+    }
 }
 
 // --- END OF CORE CHAT AND GEMINI FUNCTIONS ---
@@ -1273,16 +1869,16 @@ function updateStagedFilePreview() {
 function setCodeCanvasView(mode) {
     codeCanvasViewMode = mode;
     if (!codeCanvasTextarea || !codeCanvasInlinePreviewIframe || !codeCanvasToggleViewButton || !codeCanvasEnterFullscreenButton || !codeEditorWrapper) return;
-
+    const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
     if (mode === 'preview') {
         codeEditorWrapper.style.display = 'none';
         if(codeCanvasInlinePreviewIframe) codeCanvasInlinePreviewIframe.style.display = 'block';
-        if(codeCanvasToggleViewButton) codeCanvasToggleViewButton.textContent = 'Show Code';
+        if(codeCanvasToggleViewButton) codeCanvasToggleViewButton.textContent = currentStrings.codeCanvasShowCode;
         if(codeCanvasEnterFullscreenButton) codeCanvasEnterFullscreenButton.classList.remove('hidden');
-    } else { // 'code'
+    } else {
         codeEditorWrapper.style.display = 'block';
         if(codeCanvasInlinePreviewIframe) codeCanvasInlinePreviewIframe.style.display = 'none';
-        if(codeCanvasToggleViewButton) codeCanvasToggleViewButton.textContent = 'Show Preview';
+        if(codeCanvasToggleViewButton) codeCanvasToggleViewButton.textContent = currentStrings.codeCanvasShowPreview;
         if(codeCanvasEnterFullscreenButton) codeCanvasEnterFullscreenButton.classList.add('hidden');
         if(codeCanvasTextarea) codeCanvasTextarea.focus();
     }
@@ -1303,24 +1899,23 @@ function handleMicInput() {
             window.speechSynthesis.cancel();
         }
         if (recognition) {
+            recognition.lang = currentLanguage === 'ar' ? 'ar-SA' : (navigator.language || 'en-US');
             recognition.start();
         }
     } catch (e) {
         console.error("Speech recognition start error:", e);
         if (e instanceof Error && e.name === 'InvalidStateError' && !isListening) {
-            // Do nothing, it's a known issue
         } else {
             alert("Could not start voice recognition. Please check microphone permissions.");
         }
         micButtonContainer?.classList.remove('listening');
-        micButton?.querySelector('.mic-listening-indicator')?.classList.remove('animate-ping', 'opacity-100');
+        micButton?.querySelector('.mic-listening-indicator')?.classList.remove('animate-ping');
         isListening = false;
          if(!(e instanceof Error && e.name === 'InvalidStateError')) {
            manualTTScancelForMic = false;
          }
     }
 }
-
 
 function addProcessLogEntry(text, type = 'info', url) {
     if (!processLogListElement) return;
@@ -1355,12 +1950,9 @@ function startSimulatedProcessLog() {
     clearProcessLog();
 
     const steps = [];
-    if (advancedScientificModeEnabled) {
-        steps.push("Initiating advanced scientific research protocol...", "Deconstructing query for core research themes...", "Planning research paper structure (Abstract, Intro, Methods...)...", "Formulating detailed outline sections...", "Drafting initial sections based on plan...", "Synthesizing information and refining arguments...");
-    } else {
-        if (internetSearchEnabled) steps.push("Formulating search queries...", "Searching the web...", "Reviewing search results...");
-        if (deepThinkingEnabled) steps.push("Accessing knowledge base...", "Analyzing information...", "Considering multiple perspectives...", "Synthesizing insights...");
-    }
+    if(advancedScientificModeEnabled) steps.push("Initiating advanced scientific research protocol...", "Defining research scope...", "Formulating hypothesis (if applicable)...", "Planning paper structure (Abstract, Intro, Lit Review, Methods, etc.)...", "Gathering preliminary data from knowledge base...");
+    if (internetSearchEnabled) steps.push("Formulating search queries...", "Searching the web...", "Reviewing search results...");
+    if (deepThinkingEnabled && !advancedScientificModeEnabled) steps.push("Accessing knowledge base...", "Analyzing information...", "Considering multiple perspectives...", "Synthesizing insights...");
 
     if (stagedFile) {
         steps.unshift(`Analyzing ${stagedFile.type}: ${stagedFile.name}...`, "Extracting content...");
@@ -1378,16 +1970,10 @@ function startSimulatedProcessLog() {
         if (currentStep < steps.length) {
             addProcessLogEntry(steps[currentStep++]);
         } else {
-            if (!advancedScientificModeEnabled) { // Stop for non-scientific mode
-                stopSimulatedProcessLog();
-            } else if (processLogListElement && steps[steps.length-1] !== processLogListElement.lastChild?.textContent) {
-                // For scientific mode, indicate continuation if not actually stopped by logic elsewhere
-                addProcessLogEntry("Continuing in-depth generation...");
-            }
+            stopSimulatedProcessLog();
         }
-    }, (advancedScientificModeEnabled ? 2500 : 1200) + Math.random() * (advancedScientificModeEnabled ? 1000 : 500));
+    }, 1200 + Math.random() * 500);
 }
-
 
 function stopSimulatedProcessLog() {
     if (simulatedProcessInterval) {
@@ -1401,7 +1987,7 @@ function openInAppImageViewer(imageUrl) {
         imageViewerImg.src = imageUrl;
         showScreen(IMAGE_VIEWER_SCREEN_ID);
     } else {
-        window.open(imageUrl, '_blank');
+        alert(`Image viewer placeholder: ${imageUrl}`);
     }
 }
 
@@ -1427,6 +2013,7 @@ function speak(text, isAiMessageForVoiceMode, lang = 'en') {
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
+
     const targetLang = lang === 'ar' ? 'ar-SA' : (lang === 'en' ? 'en-US' : navigator.language || 'en-US');
     utterance.lang = targetLang;
 
@@ -1435,7 +2022,7 @@ function speak(text, isAiMessageForVoiceMode, lang = 'en') {
     if (!selectedVoice && targetLang.includes('-')) {
         selectedVoice = voices.find(voice => voice.lang.startsWith(targetLang.split('-')[0]));
     }
-    if (!selectedVoice && targetLang === 'ar-SA') {
+     if (!selectedVoice && targetLang === 'ar-SA') {
         selectedVoice = voices.find(voice => voice.lang.startsWith('ar'));
     }
 
@@ -1471,8 +2058,10 @@ function speak(text, isAiMessageForVoiceMode, lang = 'en') {
             handleMicInput();
         }
     };
+
     window.speechSynthesis.speak(utterance);
 }
+
 
 function renderCodeToIframe() {
     if (codeCanvasTextarea && codeCanvasInlinePreviewIframe) {
@@ -1487,6 +2076,7 @@ function renderCodeToIframeDebounced() {
         renderCodeToIframe();
     }, 500);
 }
+
 
 function openInAppWebView(url) {
     if (webviewScreenElement && webviewFrame && webviewTitle && webviewLoading) {
@@ -1532,7 +2122,7 @@ function toggleProcessLogPanel(forceState) {
     }
     saveSetting('processLogVisible', processLogVisible);
 
-    if (processLogVisible && (deepThinkingEnabled || internetSearchEnabled || advancedScientificModeEnabled || stagedFile)) {
+    if (processLogVisible && (deepThinkingEnabled || internetSearchEnabled || stagedFile || advancedScientificModeEnabled)) {
         startSimulatedProcessLog();
     } else {
         stopSimulatedProcessLog();
@@ -1554,13 +2144,14 @@ function handleFileUpload(event) {
         'application/xml', 'application/x-python-code', 'text/markdown', 'text/csv',
     ];
     const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
-    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
     if (file.size > MAX_FILE_SIZE) {
         displaySystemMessage(`File "${file.name}" is too large (max ${MAX_FILE_SIZE / (1024*1024)}MB).`, CHAT_SCREEN_ID);
         if (fileInputHidden) fileInputHidden.value = '';
         return;
     }
+
 
     const isTextFile = textBasedTypes.includes(file.type) ||
                        file.name.match(/\.(txt|html|css|js|json|xml|py|md|csv|log|yaml|yml|rtf|tsv|ini|cfg|conf|sh|bat|ps1|rb|java|c|cpp|h|hpp|cs|go|php|swift|kt|dart|rs|lua|pl|sql)$/i);
@@ -1611,97 +2202,9 @@ function handleFileUpload(event) {
     }
 
     if (fileInputHidden) {
-        fileInputHidden.value = ''; // Reset file input
+        fileInputHidden.value = '';
     }
 }
-
-async function handleGenerateImageInChat() {
-    if (!currentUser) {
-      displaySystemMessage("Please sign in to generate images.", CHAT_SCREEN_ID);
-      showScreen(SIGNIN_SCREEN_ID);
-      return;
-    }
-    if (isLoading || isImageLoading || !chatInput) return;
-    const prompt = chatInput.value.trim();
-    if (!prompt) {
-        displaySystemMessage("Please enter a prompt for the image.", CHAT_SCREEN_ID, 'en');
-        return;
-    }
-
-    if (!geminiInitialized && !initializeGeminiSDK()) {
-      displaySystemMessage("AI Service not ready for image generation.", CHAT_SCREEN_ID, 'en');
-      return;
-    }
-
-    const userMessageLang = detectMessageLanguage(prompt);
-    const userMessageId = `msg-user-imgprompt-${Date.now()}`;
-    appendMessage("User", prompt, 'user', false, null, false, null, userMessageLang, userMessageId, 'text');
-    chatInput.value = "";
-    disableChatInput(false, true);
-
-    const aiImageId = `msg-ai-img-${Date.now()}`;
-
-    try {
-        const response = await ai.models.generateImages({
-            model: IMAGE_MODEL_NAME,
-            prompt: prompt,
-            config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: "1:1" },
-        });
-
-        if (response.generatedImages && response.generatedImages.length > 0) {
-            const imgData = response.generatedImages[0];
-            const imageDataPayload = {
-                base64: imgData.image.imageBytes,
-                mimeType: imgData.image.mimeType || 'image/jpeg',
-                promptForImage: prompt
-            };
-            appendMessage("Nova", "", 'ai', false, null, false, null, 'en', aiImageId, 'image', imageDataPayload);
-
-            if (currentChatSessionId) {
-                const session = chatSessions.find(s => s.id === currentChatSessionId);
-                if (session) {
-                    const aiImageMessageForHistory = {
-                        id: aiImageId, sender: 'Nova',
-                        text: `[AI generated image for prompt: ${prompt.substring(0,50)}...]`,
-                        timestamp: Date.now(), messageType: 'image', imageData: imageDataPayload, detectedLanguage: 'en'
-                    };
-                    session.messages.push(aiImageMessageForHistory);
-                    session.lastUpdated = Date.now();
-                    saveChatSessionsToLocalStorage();
-                    renderChatList();
-                }
-            } else {
-                currentChatSessionId = `session-img-${Date.now()}`;
-                const newSession = {
-                    id: currentChatSessionId, title: `Image: ${prompt.substring(0,20)}...`,
-                    messages: [
-                        { id: userMessageId, sender: 'User', text: prompt, timestamp: Date.now()-100, detectedLanguage: userMessageLang, messageType: 'text'},
-                        { id: aiImageId, sender: 'Nova', text: `[AI image for: ${prompt.substring(0,50)}...]`, timestamp: Date.now(), messageType: 'image', imageData: imageDataPayload, detectedLanguage: 'en' }
-                    ],
-                    lastUpdated: Date.now(), aiToneUsed: currentAiTone,
-                };
-                chatSessions.push(newSession);
-                if (chatScreenTitleElement) chatScreenTitleElement.textContent = newSession.title;
-                saveChatSessionsToLocalStorage();
-                renderChatList();
-            }
-        } else {
-            displaySystemMessage("Sorry, I couldn't generate an image for that prompt. Please try a different prompt or check the image model.", CHAT_SCREEN_ID, 'en');
-        }
-    } catch (error) {
-        console.error("Error generating image in chat:", error);
-        let errMsg = "Failed to generate image. Please try again.";
-        if (error instanceof Error) errMsg = `Image Generation Error: ${error.message}`;
-        if (error.message && (error.message.toLowerCase().includes("safety") || error.message.includes("प्रोम्प्ट में मौजूद नहीं किया जा सका"))) {
-            errMsg = "The image could not be generated due to safety guidelines. Please try a different prompt.";
-        }
-        displaySystemMessage(errMsg, CHAT_SCREEN_ID, 'en');
-    } finally {
-        disableChatInput(false, false);
-        if (chatInput && !voiceModeActive) chatInput.focus();
-    }
-}
-
 
 function displayGeneratedImages(imagesData) {
     if (!imageStudioGridElement) return;
@@ -1835,7 +2338,8 @@ function setupEventListeners() {
 
     aiToneRadios?.forEach(radio => {
         radio.addEventListener('change', (event) => {
-            currentAiTone = event.target.value;
+            const target = event.target;
+            currentAiTone = target.value;
             saveSetting('aiTone', currentAiTone);
         });
     });
@@ -1860,18 +2364,21 @@ function setupEventListeners() {
         if (!internetSearchToggle) return;
         internetSearchEnabled = internetSearchToggle.checked;
         saveSetting('internetSearchEnabled', internetSearchEnabled);
+        if(popoverInternetSearchToggle) popoverInternetSearchToggle.checked = internetSearchEnabled;
     });
 
     deepThinkingToggle?.addEventListener('change', () => {
         if (!deepThinkingToggle) return;
         deepThinkingEnabled = deepThinkingToggle.checked;
         saveSetting('deepThinkingEnabled', deepThinkingEnabled);
+        if(popoverDeepThinkingToggle) popoverDeepThinkingToggle.checked = deepThinkingEnabled;
     });
-    
+
     advancedScientificModeToggle?.addEventListener('change', () => {
         if (!advancedScientificModeToggle) return;
         advancedScientificModeEnabled = advancedScientificModeToggle.checked;
         saveSetting('advancedScientificModeEnabled', advancedScientificModeEnabled);
+        if(popoverScientificModeToggle) popoverScientificModeToggle.checked = advancedScientificModeEnabled;
     });
 
     creativityLevelSelect?.addEventListener('change', () => {
@@ -1887,11 +2394,11 @@ function setupEventListeners() {
         voiceModeToggle.classList.toggle('active', voiceModeActive);
         voiceModeToggle.setAttribute('aria-pressed', String(voiceModeActive));
         saveSetting('voiceModeActive', voiceModeActive);
-
+        const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
         if (chatInput) {
             chatInput.disabled = voiceModeActive;
             chatInput.classList.toggle('opacity-50', voiceModeActive);
-            chatInput.placeholder = voiceModeActive ? "Voice mode active..." : "Ask Nova anything...";
+            chatInput.placeholder = voiceModeActive ? currentStrings.chatInputPlaceholderVoice : currentStrings.chatInputPlaceholder;
         }
 
         if (voiceModeActive) {
@@ -1950,8 +2457,54 @@ function setupEventListeners() {
       });
     });
     micButton?.addEventListener('click', handleMicInput);
-    generateImageChatButtonElement?.addEventListener('click', handleGenerateImageInChat);
-    uploadFileButton?.addEventListener('click', () => fileInputHidden?.click());
+
+    // Advanced Options Popover and its contents
+    advancedOptionsButton?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (advancedOptionsPopover) {
+            const isVisible = advancedOptionsPopover.style.display === 'block';
+            advancedOptionsPopover.style.display = isVisible ? 'none' : 'block';
+            if (!isVisible) { // Sync toggles when opening
+                if(popoverDeepThinkingToggle) popoverDeepThinkingToggle.checked = deepThinkingEnabled;
+                if(popoverInternetSearchToggle) popoverInternetSearchToggle.checked = internetSearchEnabled;
+                if(popoverScientificModeToggle) popoverScientificModeToggle.checked = advancedScientificModeEnabled;
+            }
+        }
+    });
+
+    document.addEventListener('click', (event) => { // Close popover if clicked outside
+        if (advancedOptionsPopover && advancedOptionsButton) {
+            if (advancedOptionsPopover.style.display === 'block' &&
+                !advancedOptionsPopover.contains(event.target) &&
+                !advancedOptionsButton.contains(event.target)) {
+                advancedOptionsPopover.style.display = 'none';
+            }
+        }
+    });
+    popoverUploadFileButton?.addEventListener('click', () => {
+        fileInputHidden?.click();
+        if (advancedOptionsPopover) advancedOptionsPopover.style.display = 'none';
+    });
+    popoverDeepThinkingToggle?.addEventListener('change', () => {
+        if (!popoverDeepThinkingToggle) return;
+        deepThinkingEnabled = popoverDeepThinkingToggle.checked;
+        saveSetting('deepThinkingEnabled', deepThinkingEnabled);
+        if (deepThinkingToggle) deepThinkingToggle.checked = deepThinkingEnabled; // Sync with main settings
+    });
+    popoverInternetSearchToggle?.addEventListener('change', () => {
+        if (!popoverInternetSearchToggle) return;
+        internetSearchEnabled = popoverInternetSearchToggle.checked;
+        saveSetting('internetSearchEnabled', internetSearchEnabled);
+        if (internetSearchToggle) internetSearchToggle.checked = internetSearchEnabled; // Sync
+    });
+    popoverScientificModeToggle?.addEventListener('change', () => {
+        if (!popoverScientificModeToggle) return;
+        advancedScientificModeEnabled = popoverScientificModeToggle.checked;
+        saveSetting('advancedScientificModeEnabled', advancedScientificModeEnabled);
+        if(advancedScientificModeToggle) advancedScientificModeToggle.checked = advancedScientificModeEnabled; // Sync
+    });
+
+
     fileInputHidden?.addEventListener('change', handleFileUpload);
 
 
@@ -1967,7 +2520,6 @@ function setupEventListeners() {
 
     function handleNavClick(targetScreen, currentActiveScreenBeforeNav) {
         if (!targetScreen) return;
-
         if (!currentUser &&
             targetScreen !== SIGNIN_SCREEN_ID &&
             targetScreen !== ONBOARDING_SCREEN_ID &&
@@ -1975,12 +2527,10 @@ function setupEventListeners() {
             showScreen(SIGNIN_SCREEN_ID);
             return;
         }
-
         if (targetScreen === "discover-screen") {
             alert("Discover section is not yet implemented.");
             return;
         }
-
         if (targetScreen === PROFILE_SCREEN_ID) {
              if (currentActiveScreenBeforeNav !== PROFILE_SCREEN_ID && currentActiveScreenBeforeNav !== MEMORIES_SCREEN_ID) {
                  previousScreenForSettings = currentActiveScreenBeforeNav;
@@ -2051,7 +2601,7 @@ function setupEventListeners() {
           openInAppWebView(target.dataset.url);
       }
       const downloadButton = target.closest('.download-in-chat-image-btn');
-      if (downloadButton && downloadButton.dataset.base64 && downloadButton.dataset.mime) {
+      if (downloadButton instanceof HTMLElement && downloadButton.dataset.base64 && downloadButton.dataset.mime) {
           const base64 = downloadButton.dataset.base64;
           const mimeType = downloadButton.dataset.mime;
           const promptForImage = downloadButton.dataset.prompt || 'generated-image';
@@ -2065,7 +2615,7 @@ function setupEventListeners() {
         const previewButton = targetElement.closest('.preview-code-btn');
         const copyButton = targetElement.closest('.copy-code-btn');
 
-        if (previewButton && codeCanvasTextarea) {
+        if (previewButton instanceof HTMLElement && codeCanvasTextarea) {
             const rawCode = previewButton.dataset.code;
             if (rawCode) {
                 codeCanvasTextarea.value = rawCode;
@@ -2073,7 +2623,7 @@ function setupEventListeners() {
                 setCodeCanvasView('preview');
                 renderCodeToIframe();
             }
-        } else if (copyButton) {
+        } else if (copyButton instanceof HTMLElement) {
             const rawCode = copyButton.dataset.code;
             if (rawCode && navigator.clipboard) {
                 navigator.clipboard.writeText(rawCode).then(() => {
@@ -2115,7 +2665,11 @@ function setupEventListeners() {
         }
     });
 
-    codeCanvasTextarea?.addEventListener('input', renderCodeToIframeDebounced);
+    codeCanvasTextarea?.addEventListener('input', () => {
+        if (codeCanvasViewMode === 'preview') {
+            renderCodeToIframeDebounced();
+        }
+    });
 
     codeCanvasToggleViewButton?.addEventListener('click', () => {
         if (codeCanvasViewMode === 'code') {
@@ -2148,7 +2702,8 @@ function setupEventListeners() {
         });
     });
     imageStudioEngineSelect?.addEventListener('change', (event) => {
-        currentImageEngine = event.target.value;
+        const target = event.target;
+        currentImageEngine = target.value;
         saveSetting('currentImageEngine', currentImageEngine);
     });
 
@@ -2162,7 +2717,7 @@ function setupEventListeners() {
             if (voiceModeToggle) voiceModeToggle.disabled = true;
             if (codeCanvasButton) codeCanvasButton.disabled = true;
             if (generateImageChatButtonElement) generateImageChatButtonElement.disabled = true;
-            if (uploadFileButton) uploadFileButton.disabled = true;
+            if (advancedOptionsButton) advancedOptionsButton.disabled = true;
         };
 
         recognition.onend = () => {
@@ -2174,7 +2729,7 @@ function setupEventListeners() {
             if (voiceModeToggle) voiceModeToggle.disabled = false;
             if (codeCanvasButton) codeCanvasButton.disabled = isLoading || isImageLoading;
             if (generateImageChatButtonElement) generateImageChatButtonElement.disabled = isLoading || isImageLoading;
-            if (uploadFileButton) uploadFileButton.disabled = isLoading || isImageLoading;
+            if (advancedOptionsButton) advancedOptionsButton.disabled = isLoading || isImageLoading;
         };
 
         recognition.onresult = (event) => {
@@ -2207,7 +2762,8 @@ function setupEventListeners() {
                 if (chatInput) {
                     chatInput.disabled = false;
                     chatInput.classList.remove('opacity-50');
-                    chatInput.placeholder = "Ask Nova anything...";
+                    const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
+                    chatInput.placeholder = currentStrings.chatInputPlaceholder;
                 }
             }
             isListening = false;
@@ -2215,8 +2771,20 @@ function setupEventListeners() {
             micButton?.querySelector('.mic-listening-indicator')?.classList.remove('animate-ping', 'opacity-100');
         };
     }
+
+    settingLanguageSelect?.addEventListener('change', (event) => {
+        currentLanguage = event.target.value;
+        saveSetting('currentLanguage', currentLanguage);
+        applyLanguage();
+    });
+
+    saveGeneralMemoryButton?.addEventListener('click', handleSaveGeneralMemory);
+    toggleSidebarButton?.addEventListener('click', toggleDesktopSidebar);
+
 }
-// --- END OF PORTED/NEWLY ADDED FUNCTIONS ---
+
+// --- END OF MOVED/NEWLY ADDED FUNCTIONS ---
+
 
 // --- Initialization ---
 function initializeApp() {
@@ -2238,11 +2806,17 @@ function initializeApp() {
   processLogListElement = document.getElementById('process-log-list');
   toggleProcessLogButtonElement = document.getElementById('toggle-process-log-btn');
   processLogCloseButtonElement = document.getElementById('process-log-close-btn');
-  generateImageChatButtonElement = document.getElementById('generate-image-chat-button');
-  uploadFileButton = document.getElementById('upload-file-button');
+  // generateImageChatButtonElement = document.getElementById('generate-image-chat-button'); // This button is removed
+  advancedOptionsButton = document.getElementById('advanced-options-button');
+  advancedOptionsPopover = document.getElementById('advanced-options-popover');
+  popoverDeepThinkingToggle = document.getElementById('popover-deep-thinking-toggle');
+  popoverInternetSearchToggle = document.getElementById('popover-internet-search-toggle');
+  popoverScientificModeToggle = document.getElementById('popover-scientific-mode-toggle');
+  popoverUploadFileButton = document.getElementById('popover-upload-file-button');
   fileInputHidden = document.getElementById('file-input-hidden');
   stagedFilePreviewElement = document.getElementById('staged-file-preview');
   stagedFileClearButton = document.getElementById('staged-file-clear-button');
+  chatInputActionsArea = document.getElementById('chat-input-actions-area');
 
 
   aiToneRadios = document.querySelectorAll('input[name="ai_tone"]');
@@ -2252,6 +2826,10 @@ function initializeApp() {
   deepThinkingToggle = document.getElementById('setting-deep-thinking-toggle');
   creativityLevelSelect = document.getElementById('setting-creativity-level');
   advancedScientificModeToggle = document.getElementById('setting-advanced-scientific-mode-toggle');
+  settingLanguageSelect = document.getElementById('setting-language-select');
+  generalMemoryInput = document.getElementById('setting-general-memory-input');
+  saveGeneralMemoryButton = document.getElementById('setting-save-general-memory-btn');
+  generalMemoriesListContainer = document.getElementById('settings-general-memories-list');
 
 
   profileUserName = document.getElementById('profile-user-name');
@@ -2279,7 +2857,7 @@ function initializeApp() {
   onboardingNextBtn = document.getElementById('onboarding-next-btn');
   onboardingSkipBtn = document.getElementById('onboarding-skip-btn');
 
-  codeCanvasButton = document.getElementById('code-canvas-button');
+  codeCanvasButton = document.getElementById('code-canvas-button'); // This button might be gone if advanced options fully replaces it
   codeCanvasScreenElement = document.getElementById(CODE_CANVAS_SCREEN_ID);
   codeCanvasTextarea = document.getElementById('code-canvas-textarea');
   codeCanvasCopyToChatButton = document.getElementById('code-canvas-copy-to-chat-btn');
@@ -2317,6 +2895,11 @@ function initializeApp() {
   createToolErrorMessageElement = document.getElementById('create-tool-error-message');
   chatListCreateToolButton = document.getElementById('chat-list-create-tool-btn');
 
+  desktopSidebar = document.getElementById('desktop-sidebar');
+  toggleSidebarButton = document.getElementById('toggle-sidebar-btn');
+  appMainContent = document.getElementById('app-main-content');
+
+
   if (typeof process === 'undefined') {
     window.process = { env: {} };
   }
@@ -2325,12 +2908,12 @@ function initializeApp() {
   }
 
   initFirebaseAuth();
-  updateStagedFilePreview();
 
   window.addEventListener('load', () => {
     if(currentScreen === CHAT_SCREEN_ID) scrollToBottomChat();
   });
-  console.log("Nova AI Mobile Initialized (v1.9.2 - Advanced Scientific Mode).");
+  updateStagedFilePreview();
+  console.log("Nova AI Initialized (v2.0.2 - Full JS Restore).");
 }
 
 // --- Firebase Authentication ---
@@ -2339,7 +2922,7 @@ function initFirebaseAuth() {
         firebaseApp = firebase.initializeApp(firebaseConfig);
         firebaseAuth = firebase.auth();
 
-        firebaseAuth.onAuthStateChanged(user => {
+        firebaseAuth.onAuthStateChanged((user) => {
             const onboardingComplete = localStorage.getItem('onboardingComplete') === 'true';
             if (user) {
                 currentUser = user;
@@ -2353,6 +2936,7 @@ function initFirebaseAuth() {
                 }
                 if (!geminiInitialized) initializeGeminiSDK();
                 loadSavedMemories();
+                loadGeneralMemories();
                 loadCustomTools();
 
             } else {
@@ -2361,7 +2945,9 @@ function initFirebaseAuth() {
                 if (profileUserName) profileUserName.textContent = "User Name";
                 if (logoutButton) logoutButton.style.display = 'none';
                 savedMemories = [];
+                generalMemories = [];
                 customTools = [];
+
 
                 if (currentScreen !== SPLASH_SCREEN_ID && currentScreen !== ONBOARDING_SCREEN_ID && currentScreen !== SIGNIN_SCREEN_ID) {
                     showScreen(SIGNIN_SCREEN_ID);
@@ -2376,12 +2962,15 @@ function initFirebaseAuth() {
                 }
             }
             loadSettings();
+            applySettings(); // This should also call applyLanguage and updateSidebarState
             loadUserProfile();
-            applySettings();
             loadChatSessionsFromLocalStorage();
             renderChatList();
+            renderGeneralMemoriesList();
             updateProfileScreenUI();
-            setupEventListeners();
+            setupEventListeners(); // setupEventListeners should be called after applyLanguage to use correct lang for aria-labels if any.
+                                 // Or call applyLanguage again at the end of setupEventListeners if it generates translatable content.
+                                 // Given current structure, applyLanguage within applySettings should be fine.
             if (currentScreen === ONBOARDING_SCREEN_ID) updateOnboardingUI();
         });
     } catch (error) {
@@ -2392,6 +2981,7 @@ function initFirebaseAuth() {
         }
         loadSettings();
         applySettings();
+        // applyLanguage(); // applySettings should handle this
         setupEventListeners();
         showScreen(SIGNIN_SCREEN_ID);
     }
@@ -2403,6 +2993,7 @@ function handleSignUp() {
     const password = signinPasswordInput.value;
     authErrorMessageElement.style.display = 'none';
     authErrorMessageElement.textContent = '';
+
 
     firebaseAuth.createUserWithEmailAndPassword(email, password)
         .then((userCredential) => {
@@ -2464,10 +3055,8 @@ function handleSignOut() {
             console.log("User signed out successfully");
             currentChatSessionId = null;
             chatSessions = [];
-            savedMemories = [];
-            customTools = [];
-            userProfile = { interests: [], preferences: {}, facts: [] };
             if (chatMessagesContainer) chatMessagesContainer.innerHTML = '';
+            // Don't call showScreen here, onAuthStateChanged will handle it.
         })
         .catch((error) => {
             console.error("Sign out error:", error);
@@ -2494,70 +3083,46 @@ function loadSettings() {
             } else { currentAiTone = defaultAiTone; saveSetting('aiTone', currentAiTone); }
         } catch (e) {
             if (typeof storedTone === 'string' && validAiTones.includes(storedTone)) {
-                currentAiTone = storedTone; saveSetting('aiTone', currentAiTone);
-            } else { currentAiTone = defaultAiTone; localStorage.removeItem('aiTone'); saveSetting('aiTone', currentAiTone); }
+                currentAiTone = storedTone;
+            } else { currentAiTone = defaultAiTone; localStorage.removeItem('aiTone'); }
+            saveSetting('aiTone', currentAiTone); // Save a valid stringified version
         }
-    } else { currentAiTone = defaultAiTone; }
+    } else { currentAiTone = defaultAiTone; saveSetting('aiTone', currentAiTone); }
 
 
-    const storedDarkMode = localStorage.getItem('darkModeEnabled');
-    darkModeEnabled = storedDarkMode ? JSON.parse(storedDarkMode) : true;
-
-    const storedTts = localStorage.getItem('ttsEnabled');
-    ttsEnabled = storedTts ? JSON.parse(storedTts) : false;
-
-    const storedVoiceMode = localStorage.getItem('voiceModeActive');
-    voiceModeActive = storedVoiceMode ? JSON.parse(storedVoiceMode) : false;
-
-    const storedInternetSearch = localStorage.getItem('internetSearchEnabled');
-    internetSearchEnabled = storedInternetSearch ? JSON.parse(storedInternetSearch) : false;
-
-    const storedDeepThinking = localStorage.getItem('deepThinkingEnabled');
-    deepThinkingEnabled = storedDeepThinking ? JSON.parse(storedDeepThinking) : false;
-
-    const storedAdvancedScientificMode = localStorage.getItem('advancedScientificModeEnabled');
-    advancedScientificModeEnabled = storedAdvancedScientificMode ? JSON.parse(storedAdvancedScientificMode) : false;
-
-    const storedProcessLogVisible = localStorage.getItem('processLogVisible');
-    processLogVisible = storedProcessLogVisible ? JSON.parse(storedProcessLogVisible) : false;
-
-    const storedImageEngine = localStorage.getItem('currentImageEngine');
-    currentImageEngine = storedImageEngine ? JSON.parse(storedImageEngine) : 'standard';
-
-    const storedCreativityLevel = localStorage.getItem('currentCreativityLevel');
-    currentCreativityLevel = storedCreativityLevel ? JSON.parse(storedCreativityLevel) : 'balanced';
+    darkModeEnabled = localStorage.getItem('darkModeEnabled') ? JSON.parse(localStorage.getItem('darkModeEnabled')) : true;
+    ttsEnabled = localStorage.getItem('ttsEnabled') ? JSON.parse(localStorage.getItem('ttsEnabled')) : false;
+    voiceModeActive = localStorage.getItem('voiceModeActive') ? JSON.parse(localStorage.getItem('voiceModeActive')) : false;
+    internetSearchEnabled = localStorage.getItem('internetSearchEnabled') ? JSON.parse(localStorage.getItem('internetSearchEnabled')) : false;
+    deepThinkingEnabled = localStorage.getItem('deepThinkingEnabled') ? JSON.parse(localStorage.getItem('deepThinkingEnabled')) : false;
+    advancedScientificModeEnabled = localStorage.getItem('advancedScientificModeEnabled') ? JSON.parse(localStorage.getItem('advancedScientificModeEnabled')) : false;
+    processLogVisible = localStorage.getItem('processLogVisible') ? JSON.parse(localStorage.getItem('processLogVisible')) : false;
+    currentImageEngine = localStorage.getItem('currentImageEngine') ? JSON.parse(localStorage.getItem('currentImageEngine')) : 'standard';
+    currentCreativityLevel = localStorage.getItem('currentCreativityLevel') || 'balanced';
+    currentLanguage = localStorage.getItem('currentLanguage') || 'en';
+    isSidebarCollapsed = localStorage.getItem('isSidebarCollapsed') === 'true';
 }
 
 function applySettings() {
-    const toneRadio = document.querySelector(`input[name="ai_tone"][value="${currentAiTone}"]`);
-    if (toneRadio) toneRadio.checked = true;
-    else if (aiToneRadios && aiToneRadios.length > 0) aiToneRadios[0].checked = true;
-
-    if (aiToneRadios) {
-        aiToneRadios.forEach(radio => {
-            radio.checked = radio.value === currentAiTone;
-        });
-    }
-
+    (document.querySelector(`input[name="ai_tone"][value="${currentAiTone}"]`))?.setAttribute('checked', 'true');
+    aiToneRadios?.forEach(radio => { radio.checked = radio.value === currentAiTone; });
     if (darkModeToggle) darkModeToggle.checked = darkModeEnabled;
     document.body.classList.toggle('light-mode', !darkModeEnabled);
-
     if (ttsToggle) ttsToggle.checked = ttsEnabled;
     if (internetSearchToggle) internetSearchToggle.checked = internetSearchEnabled;
     if (deepThinkingToggle) deepThinkingToggle.checked = deepThinkingEnabled;
     if (advancedScientificModeToggle) advancedScientificModeToggle.checked = advancedScientificModeEnabled;
     if (creativityLevelSelect) creativityLevelSelect.value = currentCreativityLevel;
 
-
     if (voiceModeToggle) {
         voiceModeToggle.classList.toggle('active', voiceModeActive);
         voiceModeToggle.setAttribute('aria-pressed', String(voiceModeActive));
     }
+    const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
     if (chatInput) {
         chatInput.disabled = voiceModeActive;
         chatInput.classList.toggle('opacity-50', voiceModeActive);
-        chatInput.placeholder = voiceModeActive ? "Voice mode active..." : "Ask Nova anything...";
-        chatInput.dir = "auto";
+        chatInput.placeholder = voiceModeActive ? currentStrings.chatInputPlaceholderVoice : currentStrings.chatInputPlaceholder;
     }
     if (processLogPanelElement) {
         processLogPanelElement.classList.toggle('open', processLogVisible);
@@ -2568,6 +3133,11 @@ function applySettings() {
     if (imageStudioEngineSelect) {
         imageStudioEngineSelect.value = currentImageEngine;
     }
+    if (settingLanguageSelect) {
+        settingLanguageSelect.value = currentLanguage;
+    }
+    applyLanguage(); // Apply language changes to UI text
+    updateSidebarState(); // Apply sidebar state
 }
 
 function saveSetting(key, value) {
@@ -2579,8 +3149,11 @@ function loadUserProfile() {
     const storedProfile = localStorage.getItem('userProfileData');
     if (storedProfile) {
         userProfile = JSON.parse(storedProfile);
-    } else {
-        userProfile = { interests: [], preferences: {}, facts: [] };
+    }
+    if (currentUser) {
+        if (profileUserEmail) profileUserEmail.textContent = currentUser.email;
+        if (profileUserName && currentUser.displayName) profileUserName.textContent = currentUser.displayName;
+        else if (profileUserName && currentUser.email) profileUserName.textContent = currentUser.email.split('@')[0];
     }
 }
 
@@ -2677,8 +3250,9 @@ JSON Output:`;
 
 
 function updateProfileScreenUI() {
+    const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
     if (currentUser) {
-        if (profileUserName) profileUserName.textContent = currentUser.displayName || userProfile.name || currentUser.email?.split('@')[0] || "User Name";
+        if (profileUserName) profileUserName.textContent = currentUser.displayName || currentUser.email?.split('@')[0] || "User Name";
         if (profileUserEmail) profileUserEmail.textContent = currentUser.email || "user.email@example.com";
         if (logoutButton) logoutButton.style.display = 'block';
     } else {
@@ -2693,10 +3267,15 @@ function updateProfileScreenUI() {
         profilePreferences.textContent = prefsText || "Not yet recorded.";
     }
     if (profileFacts) profileFacts.textContent = userProfile.facts.length > 0 ? userProfile.facts.join('; ') : "Not yet recorded.";
+
+    // Translate static parts if they have IDs or specific selectors in `applyLanguage`
+    const profileTitleEl = document.getElementById('profile-title');
+    if (profileTitleEl) profileTitleEl.textContent = currentStrings.profileTitle;
+    // Other labels are handled by applyLanguage if they have IDs/selectors in the map
 }
 
 
-// --- Screen Management ---
+// --- Screen Management & Language ---
 function showScreen(screenId) {
   if (!currentUser && screenId !== SPLASH_SCREEN_ID && screenId !== ONBOARDING_SCREEN_ID && screenId !== SIGNIN_SCREEN_ID) {
     console.log("User not authenticated. Redirecting to sign-in.");
@@ -2737,10 +3316,13 @@ function showScreen(screenId) {
       currentScreen = screenId;
       updateNavigationActiveState(screenId);
   }
-
+  const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
   if (screenId === CHAT_SCREEN_ID) {
     scrollToBottomChat();
-    if (!voiceModeActive && chatInput) chatInput.focus();
+    if (!voiceModeActive && chatInput) {
+        chatInput.focus();
+        chatInput.placeholder = editingUserMessageId ? currentStrings.chatInputPlaceholderEditing : currentStrings.chatInputPlaceholder;
+    }
     if (!geminiInitialized) initializeGeminiSDK();
     const currentSession = chatSessions.find(s => s.id === currentChatSessionId);
     if (chatScreenTitleElement) {
@@ -2748,20 +3330,31 @@ function showScreen(screenId) {
             const tool = customTools.find(t => t.id === currentChatIsBasedOnTool);
             chatScreenTitleElement.textContent = tool ? `Tool: ${tool.name}` : (currentSession?.title || "Nova");
         } else {
-            chatScreenTitleElement.textContent = currentSession?.title || "Nova";
+            chatScreenTitleElement.textContent = currentSession?.title || currentStrings.navNewChat;
         }
     }
+
   } else if (screenId === CHAT_LIST_SCREEN_ID) {
     renderChatList();
   } else if (screenId === SETTINGS_SCREEN_ID) {
-    applySettings();
+    const toneInput = document.querySelector(`input[name="ai_tone"][value="${currentAiTone}"]`);
+    if (toneInput) toneInput.checked = true;
+    if (darkModeToggle) darkModeToggle.checked = darkModeEnabled;
+    if (ttsToggle) ttsToggle.checked = ttsEnabled;
+    if (internetSearchToggle) internetSearchToggle.checked = internetSearchEnabled;
+    if (deepThinkingToggle) deepThinkingToggle.checked = deepThinkingEnabled;
+    if (advancedScientificModeToggle) advancedScientificModeToggle.checked = advancedScientificModeEnabled;
+    if (creativityLevelSelect) creativityLevelSelect.value = currentCreativityLevel;
   } else if (screenId === PROFILE_SCREEN_ID) {
     updateProfileScreenUI();
   } else if (screenId === CODE_CANVAS_SCREEN_ID) {
       if(codeCanvasTextarea && codeCanvasViewMode === 'code') codeCanvasTextarea.focus();
       const isOpenedByPreviewButton = document.activeElement?.classList.contains('preview-code-btn');
-      if (!isOpenedByPreviewButton && codeCanvasViewMode !== 'preview') {
+      if (!isOpenedByPreviewButton) {
          setCodeCanvasView('code');
+         if (codeCanvasEnterFullscreenButton) {
+            codeCanvasEnterFullscreenButton.classList.add('hidden');
+         }
       }
   } else if (screenId === IMAGE_STUDIO_SCREEN_ID) {
     if (!geminiInitialized) initializeGeminiSDK();
@@ -2774,6 +3367,9 @@ function showScreen(screenId) {
     if (toolInstructionsInput) toolInstructionsInput.value = '';
     if (toolKnowledgeInput) toolKnowledgeInput.value = '';
     if (createToolErrorMessageElement) createToolErrorMessageElement.style.display = 'none';
+  }
+  if (chatInput) { // Update chat input direction globally on screen change, just in case
+      chatInput.dir = currentLanguage === 'ar' ? 'rtl' : 'ltr';
   }
 }
 
@@ -2817,36 +3413,187 @@ function updateNavigationActiveState(activeScreenId) {
                          (item.id === 'sidebar-create-tool-nav-btn' && activeScreenId === CREATE_TOOL_SCREEN_ID);
 
         button.classList.toggle('active', isActive);
+        button.querySelector('.material-symbols-outlined')?.classList.toggle('filled', isActive);
     });
 }
 
 
-// --- Splash Screen Logic ---
-function initSplash() {
-  showScreen(SPLASH_SCREEN_ID);
-  const progressBar = document.getElementById('splash-progress-bar');
-  if (progressBar) {
-      setTimeout(() => { progressBar.style.width = '100%'; }, 100);
-  }
+function applyLanguage() {
+    document.documentElement.lang = currentLanguage;
+    document.documentElement.dir = currentLanguage === 'ar' ? 'rtl' : 'ltr';
+    if (chatInputActionsArea) {
+        chatInputActionsArea.dir = currentLanguage === 'ar' ? 'rtl' : 'ltr';
+    }
+
+    const elementsToTranslate = {
+        'splash-version-text': 'splashVersion',
+        'onboarding-next-btn': 'onboardingNext',
+        'onboarding-skip-btn': 'onboardingSkip',
+        'signin-welcome-title': 'signInWelcome',
+        'signin-prompt-text': 'signInPrompt',
+        'signin-email-input': { placeholder: 'signInEmailPlaceholder' },
+        'signin-password-input': { placeholder: 'signInPasswordPlaceholder' },
+        'signin-button': 'signInButton',
+        'signup-button': 'signUpButton',
+        'signin-poweredby-text': 'signInPoweredBy',
+        'chat-list-title': 'chatListTitle',
+        'search-chats-tools-input': { placeholder: 'searchChatsToolsPlaceholder' },
+        // 'chat-screen-title': 'navNewChat', // Handled dynamically by loadChat/createNewChatSession
+        'settings-title': 'settingsTitle',
+        'settings-ai-tone-label': 'settingsAiTone',
+        '.settings-tone-friendly-text': 'settingsFriendly',
+        '.settings-tone-formal-text': 'settingsFormal',
+        '.settings-tone-creative-text': 'settingsCreative',
+        'settings-creativity-label': 'settingsCreativity',
+        'settings-creativity-desc': 'settingsCreativityDesc',
+        'settings-creativity-focused': 'settingsCreativityFocused',
+        'settings-creativity-balanced': 'settingsCreativityBalanced',
+        'settings-creativity-inventive': 'settingsCreativityInventive',
+        'settings-features-label': 'settingsFeatures',
+        'settings-tts-label': 'settingsTTS',
+        'settings-internet-search-label': 'settingsInternetSearch',
+        'settings-deep-thinking-label': 'settingsDeepThinking',
+        'settings-scientific-mode-label': 'settingsScientificMode',
+        'settings-appearance-label': 'settingsAppearance',
+        'settings-dark-mode-label': 'settingsDarkMode',
+        'settings-other-label': 'settingsOther',
+        'settings-language-label': 'settingsLanguage',
+        'settings-dev-info-title': 'settingsDevInfoTitle',
+        'settings-dev-name': 'settingsDevName',
+        'settings-dev-contact-label': 'settingsDevContact',
+        'settings-general-memories-label': 'settingsGeneralMemories',
+        'setting-general-memory-input': { placeholder: 'settingsGeneralMemoryPlaceholder' },
+        'setting-save-general-memory-btn': 'settingsSaveGeneralMemory',
+        'profile-title': 'profileTitle',
+        'profile-learned-info-label': 'profileLearnedInfo',
+        'profile-interests-label': 'profileInterests',
+        'profile-preferences-label': 'profilePreferences',
+        'profile-facts-label': 'profileFacts',
+        'profile-view-memories-text': 'profileViewMemories',
+        'logout-button': 'profileLogout',
+        'memories-title': 'memoriesTitle',
+        // Note: memoriesNone is handled in renderMemoriesScreen
+        'create-tool-title': 'createToolTitle',
+        'tool-name-label': 'toolNameLabel',
+        'tool-instructions-label': 'toolInstructionsLabel',
+        'tool-knowledge-label': 'toolKnowledgeLabel',
+        'save-tool-text': 'toolSaveButton', // Assuming span inside save-tool-button
+        'image-studio-title': 'imageStudioTitle',
+        'image-studio-prompt-label': 'imageStudioPromptLabel',
+        'image-studio-engine-label': 'imageStudioEngineLabel',
+        'image-studio-aspect-label': 'imageStudioAspectLabel',
+        'image-studio-generate-text': 'imageStudioGenerateButton', // Assuming span inside button
+        'image-studio-loading-text': 'imageStudioLoading',
+        'image-studio-download-all-text': 'imageStudioDownloadAll', // Assuming span
+        'code-canvas-title': 'codeCanvasTitle',
+        // Nav items (text part)
+        '.nav-text-home': 'navHome',
+        '.nav-text-image-studio': 'navImageStudio',
+        '.nav-text-new-chat': 'navNewChat',
+        '.nav-text-profile': 'navProfile',
+        '.nav-text-settings': 'navSettings',
+        // Advanced Options Popover
+        'adv-opt-popover-title': 'advOptTitle',
+        '.adv-opt-deep-thinking-label': 'advOptDeepThinking', // For label text node after icon
+        '.adv-opt-internet-search-label': 'advOptInternetSearch',
+        '.adv-opt-scientific-mode-label': 'advOptScientificMode',
+        // Note: popoverUploadFileButton text content is icon + span, so direct text set might be tricky
+        // It's better to have a dedicated span for the text inside that button if translation is needed for the text part.
+    };
+    const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
+
+    for (const idOrSelector in elementsToTranslate) {
+        const keyOrConfig = elementsToTranslate[idOrSelector];
+        const elements = document.querySelectorAll(idOrSelector.startsWith('.') || idOrSelector.startsWith('#') ? idOrSelector : `#${idOrSelector}`);
+        elements.forEach(element => {
+            if (element) {
+                if (typeof keyOrConfig === 'string') { // Direct text content
+                    element.textContent = currentStrings[keyOrConfig] || uiStrings.en[keyOrConfig];
+                } else if (typeof keyOrConfig === 'object' && keyOrConfig.placeholder) { // Placeholder
+                    element.placeholder = currentStrings[keyOrConfig.placeholder] || uiStrings.en[keyOrConfig.placeholder];
+                } else if (typeof keyOrConfig === 'object' && keyOrConfig.ariaLabel) { // Aria-label
+                     element.setAttribute('aria-label', currentStrings[keyOrConfig.ariaLabel] || uiStrings.en[keyOrConfig.ariaLabel]);
+                } else if (idOrSelector.includes('-label') && typeof keyOrConfig === 'string') { // For labels like ".adv-opt-deep-thinking-label"
+                    // This assumes the text node is the last child, or the one to be targeted
+                    const textNode = Array.from(element.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '');
+                    if (textNode) {
+                        textNode.nodeValue = " " + (currentStrings[keyOrConfig] || uiStrings.en[keyOrConfig]);
+                    } else if (element.childNodes.length > 0 && element.childNodes[element.childNodes.length-1].nodeType === Node.TEXT_NODE){
+                         element.childNodes[element.childNodes.length-1].nodeValue = " " + (currentStrings[keyOrConfig] || uiStrings.en[keyOrConfig]);
+                    } else { // Fallback for complex labels, e.g. if icon and text are both in spans
+                        const textSpan = element.querySelector('span:not(.material-symbols-outlined)');
+                        if (textSpan) textSpan.textContent = currentStrings[keyOrConfig] || uiStrings.en[keyOrConfig];
+                    }
+                }
+            }
+        });
+    }
+
+    if (currentScreen === CHAT_SCREEN_ID && !currentChatSessionId && chatScreenTitleElement) {
+        chatScreenTitleElement.textContent = currentStrings.navNewChat;
+    }
+
+    if (sendButton) {
+        const currentSendTextKey = editingUserMessageId ? 'sendButtonUpdate' : 'sendButtonDefault';
+        const sendButtonTextSpan = sendButton.querySelector('span#send-button-text');
+        if (sendButtonTextSpan) {
+            sendButtonTextSpan.textContent = currentStrings[currentSendTextKey];
+        }
+        sendButton.setAttribute('aria-label', currentStrings[currentSendTextKey]);
+    }
+
+    if (codeCanvasToggleViewButton) {
+        codeCanvasToggleViewButton.textContent = codeCanvasViewMode === 'preview' ? currentStrings.codeCanvasShowCode : currentStrings.codeCanvasShowPreview;
+    }
+    const ccCopyBtnSpan = codeCanvasCopyToChatButton?.querySelector('span:not(.material-symbols-outlined)');
+    if (ccCopyBtnSpan) { ccCopyBtnSpan.textContent = currentStrings.codeCanvasCopyToChat; }
+    else if (codeCanvasCopyToChatButton) { codeCanvasCopyToChatButton.textContent = currentStrings.codeCanvasCopyToChat; }
+
+
+    if (chatInput) {
+        if (voiceModeActive) chatInput.placeholder = currentStrings.chatInputPlaceholderVoice;
+        else if (editingUserMessageId) chatInput.placeholder = currentStrings.chatInputPlaceholderEditing;
+        else chatInput.placeholder = currentStrings.chatInputPlaceholder;
+        chatInput.dir = currentLanguage === 'ar' ? 'rtl' : 'ltr';
+    }
+    const popoverUploadBtnTextSpan = popoverUploadFileButton?.querySelector('span:not(.material-symbols-outlined)');
+    if (popoverUploadBtnTextSpan) popoverUploadBtnTextSpan.textContent = currentStrings.advOptUploadFile;
+
+    updateOnboardingUI(); // Re-render onboarding with new language if visible
+    renderChatList(); // Re-render chat list to update relative times or titles if they were keys
+    renderMemoriesScreen(); // Re-render memories screen for "no memories" text
+    renderGeneralMemoriesList(); // For "no general memories" text
 }
 
+
+// --- Splash Screen Logic ---
+function initSplash() { showScreen(SPLASH_SCREEN_ID); }
 // --- Onboarding Logic ---
-let currentOnboardingStep = 0;
-const totalOnboardingSteps = 3;
-const onboardingContent = [
-    { title: "AI Assistant", main: "Your Personal AI Companion", sub: "Unlock the power of AI with our advanced chatbot. Get instant answers, creative inspiration, and personalized assistance anytime, anywhere.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDISnZDku6mxFufrdwyE8U_z3gRZvZUH6Sr7mxWY8opjTDKQYYYW4ButLoD-XUfyYe42PyqETKsHsJlrKL83tNQdCJE60dHYZf_WPlpQtZpJ0Zn1HKjhKBHrxuB0mY7ZlveDIl1oKPhbQT5GoxP-abVe_hkaPNsjY4FF-30GfB-wG9C456BvxyI7s1yE0A7J4CFCSN7SQhHazA_I8NTgQryctLNxst4uLDyUV-ZGE9ol4U8MzmCVKUkH5WsMdau8gpXcxZYvPD9Wj0" },
-    { title: "Explore Features", main: "Discover a World of Possibilities", sub: "From drafting emails to planning trips, Nova is here to help you with a wide range of tasks efficiently.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuA9F5Xf9K4Y0B3r6KCRLRlpOIDnSt0o3h3QkOPB0lXx3Q9N2uJqL8F-YgE5n_qL_xG8vXyY5ZkQz_wP9tS-n0jR6cE1K3gL4fYhP5tSjV0oN1rT0jIqU3hB1mY2wZkXvA_r" },
-    { title: "Get Started", main: "Ready to Dive In?", sub: "Let's begin your journey with Nova and experience the future of AI assistance.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuA6Y_V-VqZgC8kY7R0kR3J8lP1kCqN_wX9zT_sJqO9nF0cM_lU_pP_wBvY_qZ8xR7yK6oO7tL9vX_jE0dD1mY_gS_aA1bE2vJ3pH0sC9nM_gS7rP0vL1nX_hE1fB0a" }
-];
+let currentOnboardingStep = 0; const totalOnboardingSteps = 3;
+const onboardingContentData = { // Renamed to avoid conflict with onboardingContent var
+    en: [
+        { title: "AI Assistant", main: "Your Personal AI Companion", sub: "Unlock the power of AI with our advanced chatbot. Get instant answers, creative inspiration, and personalized assistance anytime, anywhere.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDISnZDku6mxFufrdwyE8U_z3gRZvZUH6Sr7mxWY8opjTDKQYYYW4ButLoD-XUfyYe42PyqETKsHsJlrKL83tNQdCJE60dHYZf_WPlpQtZpJ0Zn1HKjhKBHrxuB0mY7ZlveDIl1oKPhbQT5GoxP-abVe_hkaPNsjY4FF-30GfB-wG9C456BvxyI7s1yE0A7J4CFCSN7SQhHazA_I8NTgQryctLNxst4uLDyUV-ZGE9ol4U8MzmCVKUkH5WsMdau8gpXcxZYvPD9Wj0" },
+        { title: "Explore Features", main: "Discover a World of Possibilities", sub: "From drafting emails to planning trips, Nova is here to help you with a wide range of tasks efficiently.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuA9F5Xf9K4Y0B3r6KCRLRlpOIDnSt0o3h3QkOPB0lXx3Q9N2uJqL8F-YgE5n_qL_xG8vXyY5ZkQz_wP9tS-n0jR6cE1K3gL4fYhP5tSjV0oN1rT0jIqU3hB1mY2wZkXvA_r" },
+        { title: "Get Started", main: "Ready to Dive In?", sub: "Let's begin your journey with Nova and experience the future of AI assistance.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuA6Y_V-VqZgC8kY7R0kR3J8lP1kCqN_wX9zT_sJqO9nF0cM_lU_pP_wBvY_qZ8xR7yK6oO7tL9vX_jE0dD1mY_gS_aA1bE2vJ3pH0sC9nM_gS7rP0vL1nX_hE1fB0a" }
+    ],
+    ar: [
+        { title: "مساعد الذكاء الاصطناعي", main: "رفيقك الشخصي الذكي", sub: "أطلق العنان لقوة الذكاء الاصطناعي مع روبوت الدردشة المتقدم الخاص بنا. احصل على إجابات فورية وإلهام إبداعي ومساعدة شخصية في أي وقت وفي أي مكان.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDISnZDku6mxFufrdwyE8U_z3gRZvZUH6Sr7mxWY8opjTDKQYYYW4ButLoD-XUfyYe42PyqETKsHsJlrKL83tNQdCJE60dHYZf_WPlpQtZpJ0Zn1HKjhKBHrxuB0mY7ZlveDIl1oKPhbQT5GoxP-abVe_hkaPNsjY4FF-30GfB-wG9C456BvxyI7s1yE0A7J4CFCSN7SQhHazA_I8NTgQryctLNxst4uLDyUV-ZGE9ol4U8MzmCVKUkH5WsMdau8gpXcxZYvPD9Wj0" },
+        { title: "اكتشف الميزات", main: "اكتشف عالمًا من الإمكانيات", sub: "من صياغة رسائل البريد الإلكتروني إلى تخطيط الرحلات، نوفا هنا لمساعدتك في مجموعة واسعة من المهام بكفاءة.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuA9F5Xf9K4Y0B3r6KCRLRlpOIDnSt0o3h3QkOPB0lXx3Q9N2uJqL8F-YgE5n_qL_xG8vXyY5ZkQz_wP9tS-n0jR6cE1K3gL4fYhP5tSjV0oN1rT0jIqU3hB1mY2wZkXvA_r" },
+        { title: "ابدأ الآن", main: "هل أنت مستعد للبدء؟", sub: "لنبدأ رحلتك مع نوفا ونجرب مستقبل المساعدة الذكية.", image: "https://lh3.googleusercontent.com/aida-public/AB6AXuA6Y_V-VqZgC8kY7R0kR3J8lP1kCqN_wX9zT_sJqO9nF0cM_lU_pP_wBvY_qZ8xR7yK6oO7tL9vX_jE0dD1mY_gS_aA1bE2vJ3pH0sC9nM_gS7rP0vL1nX_hE1fB0a" }
+    ]
+};
 function updateOnboardingUI() {
   if (currentScreen !== ONBOARDING_SCREEN_ID) return;
+  const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
+  const currentOnboardingContent = onboardingContentData[currentLanguage] || onboardingContentData.en;
+
   if(onboardingDots) {
       onboardingDots.forEach((dot, index) => {
         dot.classList.toggle('bg-[#19e5c6]', index === currentOnboardingStep);
         dot.classList.toggle('bg-[#34655e]', index !== currentOnboardingStep);
       });
   }
-  const content = onboardingContent[currentOnboardingStep];
+  const content = currentOnboardingContent[currentOnboardingStep];
   const titleEl = document.getElementById('onboarding-title');
   const mainTextEl = document.getElementById('onboarding-main-text');
   const subTextEl = document.getElementById('onboarding-sub-text');
@@ -2857,178 +3604,97 @@ function updateOnboardingUI() {
   if (subTextEl) subTextEl.textContent = content.sub;
   if (imageEl) imageEl.style.backgroundImage = `url("${content.image}")`;
 
-  if (onboardingNextBtn) onboardingNextBtn.textContent = currentOnboardingStep === totalOnboardingSteps - 1 ? "Get Started" : "Next";
+  if (onboardingNextBtn) onboardingNextBtn.textContent = currentOnboardingStep === totalOnboardingSteps - 1 ? currentStrings.onboardingGetStarted : currentStrings.onboardingNext;
+  if (onboardingSkipBtn) onboardingSkipBtn.textContent = currentStrings.onboardingSkip;
 }
 
 // --- Chat History & Session Logic ---
-function saveChatSessionsToLocalStorage() {
-  localStorage.setItem('chatSessions', JSON.stringify(chatSessions));
-}
-
+function saveChatSessionsToLocalStorage() { localStorage.setItem('chatSessions', JSON.stringify(chatSessions)); }
 function loadChatSessionsFromLocalStorage() {
-  const storedSessions = localStorage.getItem('chatSessions');
-  if (storedSessions) {
-    chatSessions = JSON.parse(storedSessions);
-  } else {
-    chatSessions = [];
-  }
+  const stored = localStorage.getItem('chatSessions'); if (stored) chatSessions = JSON.parse(stored);
 }
-
 function deleteChatSession(sessionId) {
-    const sessionToDelete = chatSessions.find(s => s.id === sessionId);
-    if (!sessionToDelete) return;
-
-    const confirmDelete = confirm(`Are you sure you want to delete the chat "${sessionToDelete.title}"? This action cannot be undone.`);
-    if (confirmDelete) {
+    const session = chatSessions.find(s => s.id === sessionId); if (!session) return;
+    const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
+    const confirmMsg = (currentLanguage === 'ar' ? 'هل أنت متأكد أنك تريد حذف دردشة "' : 'Are you sure you want to delete chat "') + session.title + (currentLanguage === 'ar' ? '"؟ هذا الإجراء لا يمكن التراجع عنه.' : '"? This cannot be undone.');
+    if (confirm(confirmMsg)) {
         chatSessions = chatSessions.filter(s => s.id !== sessionId);
         saveChatSessionsToLocalStorage();
-
         if (currentChatSessionId === sessionId) {
             currentChatSessionId = null;
-            if (currentScreen === CHAT_SCREEN_ID) {
-                showScreen(CHAT_LIST_SCREEN_ID);
-            }
+            if (currentScreen === CHAT_SCREEN_ID) { showScreen(CHAT_LIST_SCREEN_ID); }
         }
         renderChatList();
     }
 }
 
-// --- Custom Tools Logic (New) ---
-function saveCustomTools() {
-    localStorage.setItem('customTools', JSON.stringify(customTools));
-}
-function loadCustomTools() {
-    const storedTools = localStorage.getItem('customTools');
-    if (storedTools) {
-        customTools = JSON.parse(storedTools);
-    } else {
-        customTools = [];
-    }
-}
-
+// --- Custom Tools Logic ---
+function saveCustomTools() { localStorage.setItem('customTools', JSON.stringify(customTools)); }
+function loadCustomTools() { const stored = localStorage.getItem('customTools'); if(stored) customTools = JSON.parse(stored); else customTools = []; }
 function handleSaveTool() {
     if (!toolNameInput || !toolInstructionsInput || !toolKnowledgeInput || !createToolErrorMessageElement) return;
     const name = toolNameInput.value.trim();
     const instructions = toolInstructionsInput.value.trim();
     const knowledge = toolKnowledgeInput.value.trim();
-
     if (!name || !instructions) {
         createToolErrorMessageElement.textContent = "Tool Name and Instructions are required.";
         createToolErrorMessageElement.style.display = 'block';
         return;
     }
     createToolErrorMessageElement.style.display = 'none';
-
-    const newTool = {
-        id: `tool-${Date.now()}`,
-        name,
-        instructions,
-        knowledge: knowledge || undefined,
-        icon: 'construction',
-        lastUsed: Date.now()
-    };
+    const newTool = { id: `tool-${Date.now()}`, name, instructions, knowledge: knowledge || undefined, icon: 'construction', lastUsed: Date.now() };
     customTools.push(newTool);
     saveCustomTools();
     renderChatList();
     showScreen(CHAT_LIST_SCREEN_ID);
 }
-
 function startChatWithTool(toolId) {
     const tool = customTools.find(t => t.id === toolId);
-    if (!tool) {
-        console.error("Tool not found:", toolId);
-        displaySystemMessage("Error: Could not start chat with this tool.", CHAT_SCREEN_ID);
-        return;
-    }
-
+    if (!tool) { console.error("Tool not found:", toolId); displaySystemMessage("Error: Could not start chat with this tool.", CHAT_SCREEN_ID); return; }
     currentChatSessionId = null;
     currentChatIsBasedOnTool = tool.id;
-
     if (chatMessagesContainer) chatMessagesContainer.innerHTML = '';
-    if (!geminiInitialized && !initializeGeminiSDK()) {
-        displaySystemMessage("Error: AI Service not available.", CHAT_SCREEN_ID);
-        return;
-    }
-
-    let systemInstruction;
+    if (!geminiInitialized && !initializeGeminiSDK()) { displaySystemMessage("Error: AI Service not available.", CHAT_SCREEN_ID); return; }
+    let systemInstruction = tool.instructions;
     const baseSystemInstruction = getSystemInstruction(currentAiTone, userProfile, deepThinkingEnabled, internetSearchEnabled, true, advancedScientificModeEnabled);
     systemInstruction = `${tool.instructions}\n\n${baseSystemInstruction}`;
-
-    if (tool.knowledge) {
-        systemInstruction += `\n\nConsider the following initial knowledge for this task:\n${tool.knowledge}`;
-    }
-
-    geminiChat = ai.chats.create({
-        model: TEXT_MODEL_NAME,
-        config: { systemInstruction }
-    });
-
+    if (tool.knowledge) { systemInstruction += `\n\nConsider the following initial knowledge for this task:\n${tool.knowledge}`; }
+    geminiChat = ai.chats.create({ model: TEXT_MODEL_NAME, config: { systemInstruction } });
     if (chatScreenTitleElement) chatScreenTitleElement.textContent = `Tool: ${tool.name}`;
-
     const initialGreetingText = `Using tool: ${tool.name}. How can I assist you with this tool?`;
     const initialGreetingLang = detectMessageLanguage(initialGreetingText);
     const initialMessageId = `msg-system-tool-${Date.now()}`;
     appendMessage("Nova (Tool Mode)", initialGreetingText, 'ai', false, null, true, null, initialGreetingLang, initialMessageId, 'text');
     showScreen(CHAT_SCREEN_ID);
-    if (voiceModeActive && !isListening) {
-        handleMicInput();
-    }
+    if (voiceModeActive && !isListening) { handleMicInput(); }
 }
 
-
-// --- Manual Memories Logic (New) ---
-function saveMemory(memory) {
-    savedMemories.push(memory);
-    localStorage.setItem('savedMemories', JSON.stringify(savedMemories));
-}
-function loadSavedMemories() {
-    const storedMemories = localStorage.getItem('savedMemories');
-    if (storedMemories) {
-        savedMemories = JSON.parse(storedMemories);
-    } else {
-        savedMemories = [];
-    }
-}
+// --- Manual (Chat) & General Memories Logic ---
+function saveMemory(memory) { savedMemories.push(memory); localStorage.setItem('savedMemories', JSON.stringify(savedMemories)); }
+function loadSavedMemories() { const stored = localStorage.getItem('savedMemories'); if(stored) savedMemories = JSON.parse(stored); else savedMemories = [];}
 function handleSaveToMemory(messageId, messageText, sender, chatId) {
     if (!currentUser) return;
-    const memory = {
-        id: `mem-${Date.now()}`,
-        text: messageText,
-        sender: sender,
-        chatId: chatId || currentChatSessionId,
-        originalMessageId: messageId,
-        timestamp: Date.now(),
-        userId: currentUser.uid
-    };
+    const memory = { id: `mem-${Date.now()}`, text: messageText, sender: sender, chatId: chatId || currentChatSessionId, originalMessageId: messageId, timestamp: Date.now(), userId: currentUser.uid };
     saveMemory(memory);
     const saveBtn = document.querySelector(`.message-action-btn.save-memory-btn[data-message-id="${messageId}"]`);
     if (saveBtn) {
-        const originalTextContent = saveBtn.querySelector('span:not(.material-symbols-outlined)')?.textContent || "Save to Memory";
+        const originalText = saveBtn.querySelector('span:not(.material-symbols-outlined)')?.textContent || "Save to Memory";
         saveBtn.innerHTML = `<span class="material-symbols-outlined text-sm">bookmark_added</span> Saved!`;
         saveBtn.disabled = true;
-        setTimeout(() => {
-             saveBtn.innerHTML = `<span class="material-symbols-outlined text-sm">bookmark_add</span> ${originalTextContent}`;
-             saveBtn.disabled = false;
-        }, 2000);
+        setTimeout(() => { saveBtn.innerHTML = `<span class="material-symbols-outlined text-sm">bookmark_add</span> ${originalText}`; saveBtn.disabled = false; }, 2000);
     }
     addProcessLogEntry(`Message saved to memory: "${messageText.substring(0, 30)}..."`);
 }
-
 function renderMemoriesScreen() {
     if (!memoriesListContainer) return;
     memoriesListContainer.innerHTML = '';
-    if (!currentUser) {
-        memoriesListContainer.innerHTML = `<p class="text-center text-[#7A9A94] p-8">Please sign in to view your memories.</p>`;
+    const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
+    const userMemoriesToDisplay = savedMemories.filter(m => m.userId === currentUser?.uid);
+    if (userMemoriesToDisplay.length === 0) {
+        memoriesListContainer.innerHTML = `<p class="text-center text-[#7A9A94] p-8">${currentStrings.memoriesNone}</p>`;
         return;
     }
-    const userMemories = savedMemories.filter(m => m.userId === currentUser.uid);
-
-    if (userMemories.length === 0) {
-        memoriesListContainer.innerHTML = `<p class="text-center text-[#7A9A94] p-8">No memories saved yet.</p>`;
-        return;
-    }
-
-    userMemories.sort((a, b) => b.timestamp - a.timestamp).forEach(memory => {
+    userMemoriesToDisplay.sort((a, b) => b.timestamp - a.timestamp).forEach(memory => {
         const memoryCard = document.createElement('div');
         memoryCard.className = 'bg-[#1A3A35] p-4 rounded-lg shadow text-white';
         const textP = document.createElement('p');
@@ -3037,12 +3703,53 @@ function renderMemoriesScreen() {
         const dateP = document.createElement('p');
         dateP.className = 'text-xs text-[#A0E1D9]';
         dateP.textContent = `Saved: ${new Date(memory.timestamp).toLocaleString()} (from ${memory.sender})`;
-        memoryCard.appendChild(textP);
-        memoryCard.appendChild(dateP);
+        memoryCard.appendChild(textP); memoryCard.appendChild(dateP);
         memoriesListContainer.appendChild(memoryCard);
     });
 }
 
+function saveGeneralMemories() { localStorage.setItem('generalMemories', JSON.stringify(generalMemories)); }
+function loadGeneralMemories() { const stored = localStorage.getItem('generalMemories'); if(stored) generalMemories = JSON.parse(stored); else generalMemories = []; }
+function handleSaveGeneralMemory() {
+    if (!generalMemoryInput || !currentUser) return;
+    const text = generalMemoryInput.value.trim();
+    if (!text) return;
+    const newMemory = { id: `gen-mem-${Date.now()}`, text: text, timestamp: Date.now(), userId: currentUser.uid };
+    generalMemories.push(newMemory);
+    saveGeneralMemories();
+    renderGeneralMemoriesList();
+    generalMemoryInput.value = '';
+}
+function renderGeneralMemoriesList() {
+    if (!generalMemoriesListContainer) return;
+    generalMemoriesListContainer.innerHTML = '';
+    const userGeneralMems = generalMemories.filter(m => m.userId === currentUser?.uid).sort((a,b) => b.timestamp - a.timestamp);
+
+    if (userGeneralMems.length === 0) {
+        // Optionally show a "No general memories" message
+        // generalMemoriesListContainer.innerHTML = `<p class="text-xs text-center text-[#7A9A94]">No general memories saved yet.</p>`;
+        return;
+    }
+    userGeneralMems.forEach(memory => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'general-memory-item flex justify-between items-start gap-2 bg-[#11201D] p-2 rounded-md border border-[#244742]';
+        const textP = document.createElement('p');
+        textP.className = 'text-xs text-[#C2E0DB] break-words flex-grow';
+        textP.textContent = memory.text;
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = `<span class="material-symbols-outlined text-sm text-red-400 hover:text-red-600">delete</span>`;
+        deleteBtn.className = 'p-1';
+        deleteBtn.setAttribute('aria-label', 'Delete general memory');
+        deleteBtn.onclick = () => {
+            generalMemories = generalMemories.filter(m => m.id !== memory.id);
+            saveGeneralMemories();
+            renderGeneralMemoriesList();
+        };
+        itemDiv.appendChild(textP);
+        itemDiv.appendChild(deleteBtn);
+        generalMemoriesListContainer.appendChild(itemDiv);
+    });
+}
 
 function getRelativeTime(timestamp) {
     const now = new Date().getTime();
@@ -3050,16 +3757,15 @@ function getRelativeTime(timestamp) {
     const minutes = Math.round(seconds / 60);
     const hours = Math.round(minutes / 60);
     const days = Math.round(hours / 24);
-
     if (seconds < 60) return `${seconds}s ago`;
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     return `${days}d ago`;
 }
-
 function renderChatList() {
   if (!chatListItemsContainer) return;
   chatListItemsContainer.innerHTML = '';
+  const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
 
   if (!currentUser) {
       chatListItemsContainer.innerHTML = `<p class="text-center text-[#7A9A94] p-8 lg:p-12">Please sign in to see your chats & tools.</p>`;
@@ -3112,25 +3818,29 @@ function renderChatList() {
     subTextP.className = 'text-[#7A9A94] text-sm lg:text-base font-normal leading-snug line-clamp-1';
 
     if (itemType === 'tool') {
-        iconDiv.innerHTML = `<span class="material-symbols-outlined text-3xl">${item.icon || 'construction'}</span>`;
-        titleH3.textContent = `Tool: ${item.name}`;
-        subTextP.textContent = item.instructions.substring(0, 50) + (item.instructions.length > 50 ? "..." : "");
+        const toolItem = item;
+        iconDiv.innerHTML = `<span class="material-symbols-outlined text-3xl">${toolItem.icon || 'construction'}</span>`;
+        titleH3.textContent = `Tool: ${toolItem.name}`;
+        subTextP.textContent = toolItem.instructions.substring(0, 50) + (toolItem.instructions.length > 50 ? "..." : "");
     } else {
+        const chatSessionItem = item;
         iconDiv.innerHTML = `<svg fill="currentColor" height="28px" viewBox="0 0 256 256" width="28px" xmlns="http://www.w3.org/2000/svg"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM84,116a12,12,0,1,0,12,12A12,12,0,0,0,84,116Zm88,0a12,12,0,1,0,12,12A12,12,0,0,0,172,116Zm60,12A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-16,0A88,88,0,1,0,51.81,172.06a8,8,0,0,1,.66,6.54L40,216,77.4,203.53a7.85,7.85,0,0,1,2.53-.42,8,8,0,0,1,4,1.08A88,88,0,0,0,216,128Z"></path></svg>`;
-        titleH3.textContent = item.title;
+        titleH3.textContent = chatSessionItem.title;
+
         let lastMeaningfulMessage = 'No messages yet';
-        if (item.messages && item.messages.length > 0) {
-            const lastMsg = item.messages[item.messages.length - 1];
+        if (chatSessionItem.messages && chatSessionItem.messages.length > 0) {
+            const lastMsg = chatSessionItem.messages[chatSessionItem.messages.length - 1];
             if (lastMsg.messageType === 'image' && lastMsg.imageData?.promptForImage) {
                 lastMeaningfulMessage = `[Image: ${lastMsg.imageData.promptForImage.substring(0,30)}...]`;
             } else if (lastMsg.userUploadedFile?.name) {
-                 lastMeaningfulMessage = `[${lastMsg.userUploadedFile.isImage ? "Image" : "File"}: ${lastMsg.userUploadedFile.name}] ${lastMsg.text ? lastMsg.text.substring(0,30) : ''}...`;
-            } else {
+                lastMeaningfulMessage = `[${lastMsg.userUploadedFile.isImage ? "Image" : "File"}: ${lastMsg.userUploadedFile.name}] ${lastMsg.text.substring(0,30)}...`;
+            }
+            else {
                 lastMeaningfulMessage = lastMsg.text;
             }
         }
         subTextP.textContent = lastMeaningfulMessage;
-        const lastMessageLang = item.messages && item.messages.length > 0 ? detectMessageLanguage(item.messages[item.messages.length - 1].text) : 'unknown';
+        const lastMessageLang = chatSessionItem.messages && chatSessionItem.messages.length > 0 ? detectMessageLanguage(chatSessionItem.messages[chatSessionItem.messages.length - 1].text) : 'unknown';
         if (lastMessageLang === 'ar') {
             titleH3.dir = "rtl";
             subTextP.dir = "rtl";
@@ -3144,11 +3854,13 @@ function renderChatList() {
 
     textContentDiv.appendChild(titleH3);
     textContentDiv.appendChild(subTextP);
+
     leftContentDiv.appendChild(iconDiv);
     leftContentDiv.appendChild(textContentDiv);
 
     const rightActionsDiv = document.createElement('div');
     rightActionsDiv.className = 'flex items-center gap-2 shrink-0';
+
     const timeDiv = document.createElement('div');
     timeDiv.className = 'text-xs lg:text-sm text-[#7A9A94] shrink-0';
     timeDiv.textContent = getRelativeTime(item.lastUpdated);
@@ -3169,10 +3881,135 @@ function renderChatList() {
 
     rightActionsDiv.appendChild(timeDiv);
     rightActionsDiv.appendChild(deleteButton);
+
     itemOuterDiv.appendChild(leftContentDiv);
     itemOuterDiv.appendChild(rightActionsDiv);
+
     chatListItemsContainer.appendChild(itemOuterDiv);
   });
 }
+
+
+// --- Edit/Regenerate Message Logic ---
+function handleEditUserMessage(messageId) {
+    const session = chatSessions.find(s => s.id === currentChatSessionId);
+    if (!session) return;
+    const message = session.messages.find(m => m.id === messageId);
+    if (!message || message.sender !== 'User') return;
+
+    editingUserMessageId = messageId;
+    if (chatInput) {
+        chatInput.value = message.text.replace(/\[(Image|File):.*?\]\s*/, ''); // Remove file/image preamble for editing
+        chatInput.focus();
+        const currentStrings = uiStrings[currentLanguage] || uiStrings.en;
+        chatInput.placeholder = currentStrings.chatInputPlaceholderEditing;
+    }
+    if (sendButton) {
+        sendButton.innerHTML = `<span class="material-symbols-outlined">check_circle</span> <span id="send-button-text">${uiStrings[currentLanguage].sendButtonUpdate || "Update"}</span>`;
+        sendButton.setAttribute('aria-label', uiStrings[currentLanguage].sendButtonUpdate);
+    }
+}
+
+async function handleRegenerateAiResponse(messageId) {
+    if (isLoading || isImageLoading) return; // Prevent multiple regenerations at once
+    const session = chatSessions.find(s => s.id === currentChatSessionId);
+    if (!session) return;
+
+    const aiMessageIndex = session.messages.findIndex(m => m.id === messageId);
+    if (aiMessageIndex === -1 || session.messages[aiMessageIndex].sender === 'User') return;
+
+    const userQueryMessageIndex = session.messages.slice(0, aiMessageIndex).reverse().findIndex(m => m.sender === 'User');
+    if (userQueryMessageIndex === -1) {
+        displaySystemMessage("Could not find the original user query to regenerate this response.", CHAT_SCREEN_ID);
+        return;
+    }
+    const originalUserMessage = session.messages.slice(0, aiMessageIndex).reverse()[userQueryMessageIndex];
+
+    // Rebuild history up to the user message *before* the one that prompted the AI response we're regenerating.
+    const historyForRegen = session.messages
+        .slice(0, (aiMessageIndex - 1 - userQueryMessageIndex)) // Get messages up to and including the user message before the one that prompted AI
+        .filter(msg => msg.sender !== 'System')
+        .map(msg => ({
+            role: (msg.sender === "User") ? "user" : "model",
+            parts: [{text: msg.text.replace(/\[(Image|File):.*?\]\s*/, '')}] // Strip file/image context for history
+        }));
+
+
+    const systemInstruction = getSystemInstruction(currentAiTone, userProfile, deepThinkingEnabled, internetSearchEnabled, !!currentChatIsBasedOnTool, advancedScientificModeEnabled);
+    geminiChat = ai.chats.create({ model: TEXT_MODEL_NAME, history: historyForRegen, config: { systemInstruction } });
+
+    // Remove the old AI message and any subsequent messages from UI and session
+    session.messages.splice(aiMessageIndex);
+    let currentMessageDiv = document.getElementById(messageId);
+    if (currentMessageDiv) {
+        let nextSibling = currentMessageDiv.nextElementSibling;
+        while(nextSibling && (nextSibling.classList.contains('chat-message-wrapper') || nextSibling.classList.contains('chat-message-external-sources'))) {
+            const toRemove = nextSibling;
+            nextSibling = nextSibling.nextElementSibling;
+            toRemove.remove();
+        }
+        currentMessageDiv.remove(); // Remove the AI message div itself
+    }
+
+    // "Resend" the original user message to get a new AI response for it,
+    // but use the originalUserMessage.id for the AI's new response.
+    // We need to construct the geminiMessageParts for this specific user message.
+    const userMessagePartsForRegen = [];
+    let textForRegen = originalUserMessage.text;
+    if (originalUserMessage.userUploadedFile) {
+        // This is tricky, as file content isn't stored in message.
+        // For now, assume regeneration works best for text-only or if file context is in the text.
+        // Or, we can disable regeneration for messages with file uploads if context is lost.
+        // For simplicity here, just use the text part.
+        textForRegen = originalUserMessage.text.replace(/\[(Image|File):.*?\]\s*/, '');
+        if (originalUserMessage.text === `[File: ${originalUserMessage.userUploadedFile.name}]` || originalUserMessage.text === `[Image: ${originalUserMessage.userUploadedFile.name}]`) {
+            // If the text was *only* the file preamble, use a default query
+            textForRegen = originalUserMessage.userUploadedFile.isImage ? "Describe this image." : "What about this file?";
+        }
+    }
+    userMessagePartsForRegen.push({ text: textForRegen });
+
+
+    // Call handleSendMessage with regeneration flag and the ID of the AI message to replace
+    if (chatInput) chatInput.value = originalUserMessage.text.replace(/\[(Image|File):.*?\]\s*/, ''); // Temporarily set input for handleSendMessage logic
+    await handleSendMessage(true, messageId); // Pass true for isRegeneration, and the ID of AI message
+    if (chatInput) chatInput.value = ''; // Clear input after
+}
+
+
+// --- Desktop Sidebar Logic ---
+function toggleDesktopSidebar() {
+    isSidebarCollapsed = !isSidebarCollapsed;
+    saveSetting('isSidebarCollapsed', isSidebarCollapsed);
+    updateSidebarState();
+}
+
+function updateSidebarState() {
+    if (window.innerWidth < 1024) { // lg breakpoint
+        if (desktopSidebar) desktopSidebar.classList.add('hidden');
+        if (appMainContent) appMainContent.classList.remove('lg:ml-20', 'lg:ml-60', 'xl:ml-64'); // Remove all potential margins
+        return;
+    }
+
+    if (desktopSidebar) {
+        desktopSidebar.classList.remove('hidden');
+        desktopSidebar.classList.toggle('collapsed', isSidebarCollapsed);
+    }
+    if (appMainContent) {
+        appMainContent.classList.toggle('lg:ml-20', isSidebarCollapsed); // 72px + 8px margin = 80px = 20rem
+        appMainContent.classList.toggle('lg:ml-60', !isSidebarCollapsed); // 240px for default
+        appMainContent.classList.toggle('xl:ml-64', !isSidebarCollapsed); // 256px for xl
+    }
+    if (toggleSidebarButton) {
+        const icon = toggleSidebarButton.querySelector('.material-symbols-outlined');
+        if (icon) {
+            icon.textContent = isSidebarCollapsed ? 'menu' : 'menu_open';
+        }
+    }
+}
+
+// Listen for window resize to apply sidebar logic correctly
+window.addEventListener('resize', updateSidebarState);
+
 
 document.addEventListener('DOMContentLoaded', initializeApp);

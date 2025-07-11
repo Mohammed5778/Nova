@@ -43,9 +43,9 @@
 
 ### 🖼️ لقطات من الشاشة (Screenshots)
 
-| واجهة المحادثة (Chat Interface) | عرض على الموبايل (Mobile View) |
-| :-------------------------: | :-------------------------: |
-| <img src="[رابط لصورة لواجهة التطبيق]" alt="Desktop Screenshot" width="100%"> | <img src="[رابط لصورة من نسخة الموبايل]" alt="Mobile Screenshot" width="50%"> |
+| واجهة المحادثة (Chat Interface) |
+| :-------------------------: |
+| <img src="https://github.com/Mohammed5778/Nova/blob/main/Screenshot_%D9%A2%D9%A0%D9%A2%D9%A5%D9%A0%D9%A7%D9%A1%D9%A2_%D9%A0%D9%A2%D9%A1%D9%A3%D9%A0%D9%A5_Chrome.jpg?raw=true" alt="Chat Interface Screenshot" width="100%"> |
 
 ---
 

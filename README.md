@@ -1,55 +1,49 @@
 <div align="center">
-  <img src="https://via.placeholder.com/1200x400?text=Nova+AI+-+Your+Intelligent+Agent" alt="Nova AI Project Banner">
+  <a href="https://nova-eight-gamma.vercel.app/">
+    <img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&size=30&pause=1000&color=00F7A2&center=true&vCenter=true&width=500&lines=Nova+AI+Agent;Your+Intelligent+Companion;Built+with+Gemini+API" alt="Typing SVG" />
+  </a>
 </div>
-
-<h1 align="center">
-  Nova AI Agent
-</h1>
-
-<div align="center">
-  <strong>وكيل الذكاء الاصطناعي الذكي الخاص بك، المبني باستخدام Gemini API</strong>
-</div>
-
 <br>
 
 <div align="center">
+  <a href="https://github.com/Mohammed5778/Nova">
+    <img height="180em" src="https://github-readme-stats.vercel.app/api?username=Mohammed5778&show_icons=true&theme=dracula&include_all_commits=true&count_private=true"/>
+    <img height="180em" src="https://github-readme-streak-stats.herokuapp.com/?user=Mohammed5778&theme=dracula"/>
+  </a>
+</div>
+<img src="https://raw.githubusercontent.com/trinib/trinib/main/images/divider-style-2.gif" width="100%" height="50px">
 
-  <a href="https://github.com/Mohammed5778/Nova/blob/main/LICENSE.md">
-    <img src="https://img.shields.io/github/license/Mohammed5778/Nova?style=for-the-badge" alt="License Badge"/>
-  </a>
-  <a href="https://github.com/Mohammed5778/Nova/issues">
-    <img src="https://img.shields.io/github/issues/Mohammed5778/Nova?style=for-the-badge&color=blue" alt="Issues Badge"/>
-  </a>
-  <a href="https://github.com/Mohammed5778/Nova/stargazers">
-    <img src="https://img.shields.io/github/stars/Mohammed5778/Nova?style=for-the-badge&color=yellow" alt="Stars Badge"/>
-  </a>
+## 📜 **نبذة عن المشروع (About The Project)**
+
+**Nova AI** هو وكيل ذكاء اصطناعي تفاعلي (AI Agent) مصمم لتقديم محادثات ذكية وإجابات دقيقة. تم بناء المشروع باستخدام أحدث التقنيات لضمان تجربة مستخدم سلسة وسريعة، مع الاعتماد على القوة الحسابية لنموذج Gemini من Google.
+
+### ✨ **رابط الموقع المباشر (Live Demo)**
+
+<p align="center">
   <a href="https://nova-eight-gamma.vercel.app/">
-    <img src="https://img.shields.io/badge/Vercel-Deployed-brightgreen?style=for-the-badge" alt="Vercel Deploy Badge"/>
+    <img src="https://img.shields.io/badge/Live%20Demo-Visit%20Now-brightgreen?style=for-the-badge&logo=Vercel" alt="Live Demo"/>
   </a>
+</p>
+
+<img src="https://raw.githubusercontent.com/trinib/trinib/main/images/divider-style-2.gif" width="100%" height="50px">
+
+### 🎬 **عرض حي للمشروع (Project Showcase GIF)**
+
+<div align="center">
+  <img src="[ضع هنا رابط ملف GIF الخاص بمشروعك]" alt="Project Demo GIF" width="80%">
+</div>
+
+<img src="https://raw.githubusercontent.com/trinib/trinib/main/images/divider-style-2.gif" width="100%" height="50px">
+
+## 🛠️ **التقنيات واللغات المستخدمة (Tech & Languages)**
+
+<div align="center">
+
+[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=Mohammed5778&repo=Nova&layout=compact&theme=dracula&hide_border=true&langs_count=8)](https://github.com/anuraghazra/github-readme-stats)
 
 </div>
 
-## 📜 نبذة عن المشروع (About The Project)
-
-**Nova AI** هو وكيل ذكاء اصطناعي تفاعلي (AI Agent) مصمم لتقديم محادثات ذكية وإجابات دقيقة. تم بناء المشروع باستخدام أحدث التقنيات لضمان تجربة مستخدم سلسة وسريعة، مع الاعتماد على القوة الحسابية لنموذج Gemini من Google لتقديم ردود متقدمة وواعية بالسياق.
-
-يهدف المشروع إلى استعراض إمكانيات دمج نماذج اللغة الكبيرة (LLMs) في تطبيقات الويب الحديثة لإنشاء أدوات مفيدة ومبتكرة.
-
-### ✨ رابط الموقع المباشر (Live Demo)
-
-**<a href="https://nova-eight-gamma.vercel.app/">[جرب Nova AI الآن]</a>**
-
----
-
-### 🖼️ لقطات من الشاشة (Screenshots)
-
-| واجهة المحادثة (Chat Interface) |
-| :-------------------------: |
-| <img src="https://github.com/Mohammed5778/Nova/blob/main/Screenshot_%D9%A2%D9%A0%D9%A2%D9%A5%D9%A0%D9%A7%D9%A1%D9%A2_%D9%A0%D9%A2%D9%A1%D9%A3%D9%A0%D9%A5_Chrome.jpg?raw=true" alt="Chat Interface Screenshot" width="100%"> |
-
----
-
-## 🛠️ التقنيات المستخدمة (Built With)
+<br>
 
 <p align="center">
   <a href="https://skillicons.dev">
@@ -57,63 +51,57 @@
   </a>
 </p>
 
-* **Next.js & React**: إطار عمل ومكتبة لبناء واجهة مستخدم تفاعلية وسريعة الأداء.
-* **TypeScript**: لإضافة القوة والأمان للكود المكتوب.
-* **Google Gemini API**: المحرك الأساسي الذي يمنح Nova AI قدراته الذكية في فهم اللغة وتوليد الردود.
-* **Vercel**: منصة النشر السحابية التي تضمن وصولاً سريعًا وموثوقًا للتطبيق.
+<img src="https://raw.githubusercontent.com/trinib/trinib/main/images/divider-style-2.gif" width="100%" height="50px">
 
----
+## 🚀 **كيفية تشغيل المشروع (Get Started)**
 
-## 🚀 تشغيل ونشر التطبيق (Run and Deploy)
+<p align="center">
+  <img src="https://img.shields.io/badge/1-Clone-black?style=for-the-badge&logo=git">
+  <code>git clone https://github.com/Mohammed5778/Nova.git && cd Nova</code>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/2-Install-blue?style=for-the-badge&logo=npm">
+  <code>npm install</code>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/3-API%20Key-yellow?style=for-the-badge&logo=google-gemini">
+  <code>GEMINI_API_KEY="Your_Key_Here"</code>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/4-Run-green?style=for-the-badge&logo=nodedotjs">
+  <code>npm run dev</code>
+</p>
 
-لتشغيل نسخة محلية من **Nova AI** على جهازك، اتبع الخطوات التالية.
+<img src="https://raw.githubusercontent.com/trinib/trinib/main/images/divider-style-2.gif" width="100%" height="50px">
 
-### Run Locally (التشغيل المحلي)
+## 📄 **الترخيص (License)**
 
-**Prerequisites (المتطلبات الأساسية):**
-* **Node.js**: تأكد من تثبيته على جهازك.
+<p align="center">
+  <a href="https://github.com/Mohammed5778/Nova/blob/main/LICENSE.md">
+    <img src="https://img.shields.io/github/license/Mohammed5778/Nova?style=for-the-badge" alt="License Badge"/>
+  </a>
+</p>
 
-**Instructions (التعليمات):**
+<img src="https://raw.githubusercontent.com/trinib/trinib/main/images/divider-style-2.gif" width="100%" height="50px">
 
-1.  **Clone the repository (انسخ المستودع):**
-    ```bash
-    git clone [https://github.com/Mohammed5778/Nova.git](https://github.com/Mohammed5778/Nova.git)
-    cd Nova
-    ```
+## 📬 **تواصل معي (Let's Connect)**
 
-2.  **Install dependencies (تثبيت الاعتماديات):**
-    ```bash
-    npm install
-    ```
+<p align="center">
+  <a href="https://www.linkedin.com/in/mohammed-ibrahim-abdullah-a56066269">
+    <img src="https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"/>
+  </a>
+  &nbsp;&nbsp;
+  <a href="mailto:Abdullahmeme551@gmail.com">
+    <img src="https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white" alt="Gmail"/>
+  </a>
+</p>
 
-3.  **Set your API Key (إعداد مفتاح API):**
-    قم بإنشاء ملف جديد باسم `.env.local` في المجلد الرئيسي للمشروع. أضف مفتاح Gemini API الخاص بك داخل هذا الملف كما يلي:
-    ```bash
-    GEMINI_API_KEY="Your_API_Key_Here"
-    ```
-    *يمكنك الحصول على مفتاح API من [Google AI Studio](https://aistudio.google.com/app/apikey).*
-
-4.  **Run the app (تشغيل التطبيق):**
-    ```bash
-    npm run dev
-    ```
-    الآن يمكنك فتح [http://localhost:3000](http://localhost:3000) في متصفحك لبدء التحدث مع Nova AI.
-
----
-
-## 📄 الترخيص (License)
-
-هذا المشروع محمي بموجب الترخيص الموجود في الملف التالي:
-**<a href="https://github.com/Mohammed5778/Nova/blob/main/LICENSE.md">LICENSE.md</a>**
-
----
-
-## 📬 تواصل معي (Contact)
-
-**محمد ابراهيم عبدالله**
-
-[![LinkedIn][linkedin-shield]](https://www.linkedin.com/in/mohammed-ibrahim-abdullah-a56066269)
-[![Gmail][gmail-shield]](mailto:Abdullahmeme551@gmail.com)
-
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[gmail-shield]: https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white
+<hr>
+<div align="center">
+  <p>
+    <img src="https://komarev.com/ghpvc/?username=Mohammed5778&label=PROFILE+VIEWS&style=flat&color=brightgreen" alt="Profile views" />
+  </p>
+  <p>
+    Built with ❤️ and a lot of ☕
+  </p>
+</div>

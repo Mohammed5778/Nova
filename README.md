@@ -14,14 +14,14 @@
 
 <div align="center">
 
-  <a href="https://github.com/Your-GitHub-Username/Your-Repo-Name/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Your-GitHub-Username/Your-Repo-Name?style=for-the-badge" alt="License Badge"/>
+  <a href="https://github.com/Mohammed5778/Nova/blob/main/LICENSE.md">
+    <img src="https://img.shields.io/github/license/Mohammed5778/Nova?style=for-the-badge" alt="License Badge"/>
   </a>
-  <a href="https://github.com/Your-GitHub-Username/Your-Repo-Name/issues">
-    <img src="https://img.shields.io/github/issues/Your-GitHub-Username/Your-Repo-Name?style=for-the-badge&color=blue" alt="Issues Badge"/>
+  <a href="https://github.com/Mohammed5778/Nova/issues">
+    <img src="https://img.shields.io/github/issues/Mohammed5778/Nova?style=for-the-badge&color=blue" alt="Issues Badge"/>
   </a>
-  <a href="https://github.com/Your-GitHub-Username/Your-Repo-Name/stargazers">
-    <img src="https://img.shields.io/github/stars/Your-GitHub-Username/Your-Repo-Name?style=for-the-badge&color=yellow" alt="Stars Badge"/>
+  <a href="https://github.com/Mohammed5778/Nova/stargazers">
+    <img src="https://img.shields.io/github/stars/Mohammed5778/Nova?style=for-the-badge&color=yellow" alt="Stars Badge"/>
   </a>
   <a href="https://nova-eight-gamma.vercel.app/">
     <img src="https://img.shields.io/badge/Vercel-Deployed-brightgreen?style=for-the-badge" alt="Vercel Deploy Badge"/>
@@ -45,7 +45,7 @@
 
 | واجهة المحادثة (Chat Interface) | عرض على الموبايل (Mobile View) |
 | :-------------------------: | :-------------------------: |
-| <img src="https://via.placeholder.com/600x400?text=Nova+AI+Chat+Interface" alt="Desktop Screenshot" width="100%"> | <img src="https://via.placeholder.com/300x400?text=Nova+AI+Mobile+View" alt="Mobile Screenshot" width="50%"> |
+| <img src="[رابط لصورة لواجهة التطبيق]" alt="Desktop Screenshot" width="100%"> | <img src="[رابط لصورة من نسخة الموبايل]" alt="Mobile Screenshot" width="50%"> |
 
 ---
 
@@ -77,8 +77,8 @@
 
 1.  **Clone the repository (انسخ المستودع):**
     ```bash
-    git clone [https://github.com/Your-GitHub-Username/Your-Repo-Name.git](https://github.com/Your-GitHub-Username/Your-Repo-Name.git)
-    cd Your-Repo-Name
+    git clone [https://github.com/Mohammed5778/Nova.git](https://github.com/Mohammed5778/Nova.git)
+    cd Nova
     ```
 
 2.  **Install dependencies (تثبيت الاعتماديات):**
@@ -103,14 +103,17 @@
 
 ## 📄 الترخيص (License)
 
-هذا المشروع محمي بموجب ترخيص مخصص يمنع الاستخدام التجاري أو التعديل. انظر ملف `LICENSE` لمزيد من التفاصيل.
+هذا المشروع محمي بموجب الترخيص الموجود في الملف التالي:
+**<a href="https://github.com/Mohammed5778/Nova/blob/main/LICENSE.md">LICENSE.md</a>**
 
 ---
 
 ## 📬 تواصل معي (Contact)
 
-**[اكتب اسمك هنا]** - [your.email@example.com](mailto:your.email@example.com)
+**محمد ابراهيم عبدالله**
 
-[![LinkedIn][linkedin-shield]]([رابط بروفايلك على لينكدإن])
+[![LinkedIn][linkedin-shield]](https://www.linkedin.com/in/mohammed-ibrahim-abdullah-a56066269)
+[![Gmail][gmail-shield]](mailto:Abdullahmeme551@gmail.com)
 
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
+[gmail-shield]: https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white

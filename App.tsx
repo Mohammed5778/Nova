@@ -50,8 +50,26 @@ interface TableContent { type: 'table'; title: string; data: string[][]; }
 interface ChartContent { type: 'chart'; title: string; data: { chartType: string; chartData: any; }; }
 interface ReportContent { type: 'report'; title: string; data: { section: string; content: string }[]; }
 interface NewsReportContent { type: 'news_report'; title: string; summary: string; articles: { headline: string; source: string; snippet: string; link: string }[]; }
+interface ResumeContent {
+    type: 'resume';
+    name: string;
+    title: string;
+    contact: { email?: string; phone?: string; linkedin?: string; github?: string; website?: string; };
+    summary: string;
+    experience: { title:string; company:string; location:string; dates:string; responsibilities:string[]; }[];
+    education: { degree:string; institution:string; dates:string; details?: string; }[];
+    skills: { category: string; items: string[]; }[];
+    projects?: { name: string; description: string; link?: string; }[];
+}
+interface CodeProjectContent {
+    type: 'code_project';
+    title: string;
+    files: { filename: string; language: string; code: string; }[];
+    review: { overview: string; strengths: string[]; improvements: string[]; nextSteps: string[]; };
+}
 
-type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent;
+
+type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent;
 
 
 interface Message {
@@ -106,14 +124,12 @@ const LogoIcon = ({ className = "w-8 h-8", style }: { className?: string; style?
     </svg>
 );
 
-const HomeIcon = () => <i className="fas fa-home"></i>;
 const ImageIcon = () => <i className="fas fa-image"></i>;
 const ToolIcon = () => <i className="fas fa-tools"></i>;
 const ProfileIcon = () => <i className="fas fa-user"></i>;
 const PaperPlaneIcon = () => <i className="fas fa-paper-plane"></i>;
 const UploadIcon = () => <i className="fas fa-paperclip"></i>;
 const SettingsIcon = () => <i className="fas fa-cog"></i>;
-const PlusIcon = () => <i className="fas fa-plus"></i>;
 const TrashIcon = () => <i className="fas fa-trash"></i>;
 const CloseIcon = () => <i className="fas fa-times"></i>;
 const FilePdfIcon = () => <i className="fas fa-file-pdf text-red-400"></i>;
@@ -334,6 +350,192 @@ const NewsReportView: React.FC<NewsReportContent> = ({ title, summary, articles 
     );
 };
 
+const CodeProjectView: React.FC<{ project: CodeProjectContent, onPreviewCode: (code: string, language: string) => void }> = ({ project, onPreviewCode }) => {
+    const [activeTab, setActiveTab] = useState(0);
+    const { title, files, review } = project;
+
+    const reviewIcons = {
+        overview: 'fas fa-binoculars',
+        strengths: 'fas fa-check-circle',
+        improvements: 'fas fa-wrench',
+        nextSteps: 'fas fa-arrow-right'
+    };
+
+    return (
+        <div className="code-project-view">
+            <h3 className="text-xl font-bold mb-3">{title}</h3>
+            
+            {/* Code Files Section */}
+            <div className="bg-gray-950/70 rounded-lg border border-purple-500/30">
+                <div className="flex border-b border-purple-500/30 overflow-x-auto">
+                    {files.map((file, index) => (
+                        <button 
+                            key={index} 
+                            onClick={() => setActiveTab(index)}
+                            className={`px-4 py-2 text-sm font-semibold shrink-0 ${activeTab === index ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}
+                        >
+                            {file.filename}
+                        </button>
+                    ))}
+                </div>
+                <div>
+                    {files.map((file, index) => (
+                        <div key={index} className={activeTab === index ? 'block' : 'hidden'}>
+                            <CodeBlock language={file.language} code={file.code} onPreview={onPreviewCode} />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Review Section */}
+            <div className="mt-6">
+                <h4 className="text-lg font-bold mb-3 text-purple-300">مراجعة المشروع</h4>
+                <div className="space-y-4">
+                    <div className="review-section">
+                        <h5 className="review-title"><i className={`${reviewIcons.overview} mr-2`}></i> نظرة عامة</h5>
+                        <p>{review.overview}</p>
+                    </div>
+                    <div className="review-section">
+                         <h5 className="review-title"><i className={`${reviewIcons.strengths} mr-2 text-green-400`}></i> نقاط القوة</h5>
+                        <ul className="list-disc pl-5 space-y-1">
+                            {review.strengths.map((item, i) => <li key={i}>{item}</li>)}
+                        </ul>
+                    </div>
+                    <div className="review-section">
+                         <h5 className="review-title"><i className={`${reviewIcons.improvements} mr-2 text-yellow-400`}></i> اقتراحات للتحسين</h5>
+                        <ul className="list-disc pl-5 space-y-1">
+                            {review.improvements.map((item, i) => <li key={i}>{item}</li>)}
+                        </ul>
+                    </div>
+                     <div className="review-section">
+                         <h5 className="review-title"><i className={`${reviewIcons.nextSteps} mr-2 text-blue-400`}></i> الخطوات التالية</h5>
+                        <ul className="list-disc pl-5 space-y-1">
+                            {review.nextSteps.map((item, i) => <li key={i}>{item}</li>)}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
+    const resumeRef = useRef<HTMLDivElement>(null);
+    const { name, title, contact, summary, experience, education, skills, projects } = resume;
+
+    const handleExport = () => {
+        if (resumeRef.current) {
+            html2canvas(resumeRef.current, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                windowWidth: resumeRef.current.scrollWidth,
+                windowHeight: resumeRef.current.scrollHeight,
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = imgHeight / imgWidth;
+                const canvasHeightOnPdf = pdfWidth * ratio;
+
+                let heightLeft = canvasHeightOnPdf;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
+                heightLeft -= pdfHeight;
+
+                while (heightLeft > 0) {
+                    position = position - pdfHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
+                    heightLeft -= pdfHeight;
+                }
+
+                pdf.save(`${name.replace(/ /g, '_')}_Resume.pdf`);
+            });
+        }
+    };
+    
+    return (
+        <div className="bg-gray-800/50 p-0.5 rounded-lg my-2 border border-purple-500/30">
+            <div className="flex justify-between items-center p-2 bg-gray-950/50 rounded-t-lg">
+                <span className="text-xs text-purple-300 font-mono">سيرة ذاتية (ATS-Friendly)</span>
+                <button onClick={handleExport} className="text-gray-400 hover:text-white transition-colors text-xs p-1 rounded flex items-center gap-1">
+                    <DownloadIcon /> تصدير PDF
+                </button>
+            </div>
+            <div ref={resumeRef} className="resume-view">
+                <header className="resume-header">
+                    <h1>{name}</h1>
+                    <h2>{title}</h2>
+                    <div className="resume-contact">
+                        {contact.email && <span><i className="fas fa-envelope"></i> {contact.email}</span>}
+                        {contact.phone && <span><i className="fas fa-phone"></i> {contact.phone}</span>}
+                        {contact.linkedin && <span><i className="fab fa-linkedin"></i> {contact.linkedin}</span>}
+                        {contact.github && <span><i className="fab fa-github"></i> {contact.github}</span>}
+                        {contact.website && <span><i className="fas fa-globe"></i> {contact.website}</span>}
+                    </div>
+                </header>
+                <main className="resume-body">
+                    <section className="resume-main-content">
+                        <div className="resume-section">
+                            <h3><i className="fas fa-user-tie"></i> ملخص احترافي</h3>
+                            <p>{summary}</p>
+                        </div>
+                        <div className="resume-section">
+                            <h3><i className="fas fa-briefcase"></i> الخبرة العملية</h3>
+                            {experience.map((exp, i) => (
+                                <div key={i} className="resume-item">
+                                    <h4>{exp.title}</h4>
+                                    <h5>{exp.company} | {exp.location}</h5>
+                                    <h6>{exp.dates}</h6>
+                                    <ul>{exp.responsibilities.map((r, j) => <li key={j}>{r}</li>)}</ul>
+                                </div>
+                            ))}
+                        </div>
+                         {projects && projects.length > 0 && (
+                            <div className="resume-section">
+                                <h3><i className="fas fa-tasks"></i> المشاريع</h3>
+                                {projects.map((proj, i) => (
+                                    <div key={i} className="resume-item">
+                                        <h4>{proj.name}</h4>
+                                        {proj.link && <a href={proj.link} target="_blank" rel="noopener noreferrer">{proj.link}</a>}
+                                        <p>{proj.description}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                    <aside className="resume-sidebar">
+                        <div className="resume-section">
+                            <h3><i className="fas fa-graduation-cap"></i> التعليم</h3>
+                             {education.map((edu, i) => (
+                                <div key={i} className="resume-item">
+                                    <h4>{edu.degree}</h4>
+                                    <h5>{edu.institution}</h5>
+                                    <h6>{edu.dates}</h6>
+                                    {edu.details && <p>{edu.details}</p>}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="resume-section">
+                            <h3><i className="fas fa-cogs"></i> المهارات</h3>
+                             {skills.map((skillCat, i) => (
+                                <div key={i} className="mb-2">
+                                    <h4>{skillCat.category}</h4>
+                                    <p>{skillCat.items.join(', ')}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        </div>
+    );
+};
+
 
 // --- UI & VIEW COMPONENTS ---
 
@@ -421,6 +623,8 @@ const MessageBubble: React.FC<{ message: Message, onSaveMemory: (message: Messag
                                         }}
                                     />;
                 case 'news_report': return <NewsReportView {...richContent} />;
+                case 'resume': return <ResumeView resume={richContent} />;
+                case 'code_project': return <CodeProjectView project={richContent} onPreviewCode={onPreviewCode} />;
                 default: return <p>محتوى غير مدعوم.</p>;
             }
         }
@@ -473,11 +677,13 @@ const MainSidebar: React.FC<{
     onNewTempChat: () => void;
     onDeleteSession: (id: string) => void;
     isCollapsed: boolean;
-    onToggle: () => void;
+    onToggleCollapse: () => void;
     currentView: View;
     onSetView: (view: View) => void;
     onLogout: () => void;
-}> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, onToggle, currentView, onSetView, onLogout }) => {
+    isDrawerOpen: boolean;
+    onCloseDrawer: () => void;
+}> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, onToggleCollapse, currentView, onSetView, onLogout, isDrawerOpen, onCloseDrawer }) => {
     const sortedSessions = Object.values(sessions).sort((a, b) => {
         const timeA = a.messages[a.messages.length - 1]?.id || '0';
         const timeB = b.messages[b.messages.length - 1]?.id || '0';
@@ -490,39 +696,52 @@ const MainSidebar: React.FC<{
         { id: View.PROFILE, icon: <ProfileIcon />, label: 'الملف الشخصي' },
         { id: View.SETTINGS, icon: <SettingsIcon />, label: 'الإعدادات' },
     ];
+    
+    const handleAction = (action: () => void) => {
+        action();
+        onCloseDrawer();
+    };
 
-    const handleNewChatClick = () => {
+    const handleNewChatClick = () => handleAction(() => {
         onSetView(View.CHAT);
         onNewChat();
-    }
+    });
     
-    const handleNewTempChatClick = () => {
+    const handleNewTempChatClick = () => handleAction(() => {
         onSetView(View.CHAT);
         onNewTempChat();
-    }
+    });
     
-    const handleToolClick = (tool: CustomTool) => {
+    const handleToolClick = (tool: CustomTool) => handleAction(() => {
         onSetView(View.CHAT);
         onNewChat(tool);
-    }
+    });
     
-    const handleSessionClick = (id: string) => {
+    const handleSessionClick = (id: string) => handleAction(() => {
         onSetView(View.CHAT);
         onSelectSession(id);
-    }
+    });
+    
+    const handleViewClick = (view: View) => handleAction(() => onSetView(view));
+    const handleLogoutClick = () => handleAction(onLogout);
 
-    return (
-        <aside className={`bg-[rgba(10,10,26,0.8)] backdrop-blur-md flex flex-col p-3 border-l border-purple-500/20 transition-all duration-300 relative shrink-0 ${isCollapsed ? 'w-20' : 'w-72'}`}>
-            <button onClick={onToggle} className="absolute top-1/2 -left-3 transform -translate-y-1/2 w-6 h-6 bg-[#0c0c1f] border border-purple-500/30 rounded-full flex items-center justify-center text-gray-400 hover:bg-purple-500/20 z-20">
+    const sidebarContent = (isMobile: boolean) => (
+         <>
+            <button onClick={onToggleCollapse} className="absolute top-1/2 -left-3 transform -translate-y-1/2 w-6 h-6 bg-[#0c0c1f] border border-purple-500/30 rounded-full hidden lg:flex items-center justify-center text-gray-400 hover:bg-purple-500/20 z-20">
                 {isCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
             </button>
+            {isMobile && (
+                 <button onClick={onCloseDrawer} className="absolute top-4 left-4 text-gray-400 hover:text-white">
+                    <CloseIcon />
+                 </button>
+            )}
 
-            <div className={`flex items-center gap-2 mb-4 p-2 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+            <div className={`flex items-center gap-2 mb-4 p-2 ${isCollapsed && !isMobile ? 'justify-center' : 'justify-between'}`}>
                 <div className="flex items-center gap-2">
                     <LogoIcon className="w-8 h-8" />
-                    {!isCollapsed && <span className="text-xl font-bold">Nova AI</span>}
+                    {(!isCollapsed || isMobile) && <span className="text-xl font-bold">Nova AI</span>}
                 </div>
-                {!isCollapsed && (
+                {(!isCollapsed || isMobile) && (
                     <div className="flex items-center">
                          <button onClick={handleNewTempChatClick} className="p-2 rounded-md hover:bg-purple-500/20" title="محادثة مؤقتة"><GhostIcon/></button>
                          <button onClick={handleNewChatClick} className="p-2 rounded-md hover:bg-purple-500/20" title="محادثة جديدة"><EditIcon/></button>
@@ -532,30 +751,30 @@ const MainSidebar: React.FC<{
             
             <div className="flex-1 overflow-y-auto pr-1 space-y-4">
                  <div>
-                    <h3 className={`text-xs font-bold text-gray-400 uppercase pb-1 transition-all ${isCollapsed ? 'text-center' : 'px-3'}`}>الأدوات</h3>
+                    <h3 className={`text-xs font-bold text-gray-400 uppercase pb-1 transition-all ${isCollapsed && !isMobile ? 'text-center' : 'px-3'}`}>الأدوات</h3>
                     <ul className="space-y-1">
                         {tools.map(tool => (
                              <li key={tool.id} title={tool.name}>
-                                <a href="#" onClick={e => {e.preventDefault(); handleToolClick(tool)}} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-purple-500/10 ${isCollapsed ? 'justify-center' : ''}`}>
+                                <a href="#" onClick={e => {e.preventDefault(); handleToolClick(tool)}} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-purple-500/10 ${isCollapsed && !isMobile ? 'justify-center' : ''}`}>
                                     <span className="text-xl">{tool.icon}</span>
-                                    {!isCollapsed && <span className="font-semibold text-sm truncate">{tool.name}</span>}
+                                    {(!isCollapsed || isMobile) && <span className="font-semibold text-sm truncate">{tool.name}</span>}
                                 </a>
                             </li>
                         ))}
                     </ul>
                 </div>
                 <div>
-                    <h3 className={`text-xs font-bold text-gray-400 uppercase pb-1 transition-all ${isCollapsed ? 'text-center' : 'px-3 pt-2'}`}>الأخيرة</h3>
+                    <h3 className={`text-xs font-bold text-gray-400 uppercase pb-1 transition-all ${isCollapsed && !isMobile ? 'text-center' : 'px-3 pt-2'}`}>الأخيرة</h3>
                     <ul className="space-y-1">
                         {sortedSessions.map(session => (
                             <li key={session.id} className="group" title={session.title}>
                                 <a
                                     href="#"
                                     onClick={(e) => { e.preventDefault(); handleSessionClick(session.id); }}
-                                    className={`flex justify-between items-center p-2 rounded-lg text-sm truncate w-full ${activeId === session.id && currentView === View.CHAT ? 'bg-purple-500/30' : 'hover:bg-purple-500/10'} ${isCollapsed ? 'justify-center' : ''}`}
+                                    className={`flex justify-between items-center p-2 rounded-lg text-sm truncate w-full ${activeId === session.id && currentView === View.CHAT ? 'bg-purple-500/30' : 'hover:bg-purple-500/10'} ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
                                 >
-                                    {!isCollapsed ? <span className="truncate">{session.title}</span> : <span className="w-2 h-2 bg-gray-400 rounded-full"></span>}
-                                    {!isCollapsed && <button onClick={(e) => {e.stopPropagation(); onDeleteSession(session.id);}} className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 ml-2"><TrashIcon /></button>}
+                                    {(!isCollapsed || isMobile) ? <span className="truncate">{session.title}</span> : <span className="w-2 h-2 bg-gray-400 rounded-full"></span>}
+                                    {(!isCollapsed || isMobile) && <button onClick={(e) => {e.stopPropagation(); onDeleteSession(session.id);}} className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 ml-2"><TrashIcon /></button>}
                                 </a>
                             </li>
                         ))}
@@ -567,20 +786,33 @@ const MainSidebar: React.FC<{
                  {mainNavItems.map(item => (
                      <button
                         key={item.id}
-                        onClick={() => onSetView(item.id)}
-                        className={`flex items-center gap-4 w-full p-3 rounded-lg text-sm transition-colors ${currentView === item.id ? 'bg-purple-500/30 text-white' : 'text-gray-400 hover:bg-purple-500/10 hover:text-white'} ${isCollapsed ? 'justify-center' : ''}`}
+                        onClick={() => handleViewClick(item.id)}
+                        className={`flex items-center gap-4 w-full p-3 rounded-lg text-sm transition-colors ${currentView === item.id ? 'bg-purple-500/30 text-white' : 'text-gray-400 hover:bg-purple-500/10 hover:text-white'} ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
                         title={item.label}
                     >
                         <span className="w-6 text-center text-lg">{item.icon}</span>
-                        {!isCollapsed && <span>{item.label}</span>}
+                        {(!isCollapsed || isMobile) && <span>{item.label}</span>}
                     </button>
                  ))}
-                <button onClick={onLogout} className={`flex items-center gap-4 w-full p-3 rounded-lg text-sm transition-colors text-gray-400 hover:bg-red-500/10 hover:text-white ${isCollapsed ? 'justify-center' : ''}`} title="تسجيل الخروج">
+                <button onClick={handleLogoutClick} className={`flex items-center gap-4 w-full p-3 rounded-lg text-sm transition-colors text-gray-400 hover:bg-red-500/10 hover:text-white ${isCollapsed && !isMobile ? 'justify-center' : ''}`} title="تسجيل الخروج">
                     <span className="w-6 text-center text-lg"><i className="fas fa-sign-out-alt"></i></span>
-                    {!isCollapsed && <span>الخروج</span>}
+                    {(!isCollapsed || isMobile) && <span>الخروج</span>}
                 </button>
             </div>
-        </aside>
+         </>
+    );
+
+    return (
+        <>
+            {/* Mobile Drawer */}
+            <aside className={`lg:hidden fixed top-0 bottom-0 right-0 h-full z-50 bg-[rgba(10,10,26,0.95)] backdrop-blur-md flex flex-col p-3 border-l border-purple-500/20 transition-transform duration-300 w-72 ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+               {sidebarContent(true)}
+            </aside>
+            {/* Desktop Sidebar */}
+            <aside className={`hidden lg:flex bg-[rgba(10,10,26,0.8)] backdrop-blur-md flex-col p-3 border-l border-purple-500/20 transition-all duration-300 relative shrink-0 ${isCollapsed ? 'w-20' : 'w-72'}`}>
+                {sidebarContent(false)}
+            </aside>
+        </>
     );
 };
 
@@ -620,7 +852,7 @@ const ImageStudioView: React.FC = () => {
                     className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]"
                     disabled={isLoading}
                 />
-                <div className="flex gap-4">
+                <div className="flex flex-col md:flex-row gap-4">
                     <select
                         value={aspectRatio}
                         onChange={e => setAspectRatio(e.target.value as any)}
@@ -789,7 +1021,7 @@ const CreateToolView: React.FC<{
 
     return (
         <div className="w-full">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="setting-card space-y-4">
                     <h2 className="setting-title">{editingTool ? 'تعديل الأداة' : 'إنشاء أداة جديدة'}</h2>
                     <div>
@@ -851,7 +1083,7 @@ const ProfileView: React.FC<{
     onDeleteMemory: (id: string) => void,
 }> = ({ userProfile, savedMemories, onDeleteMemory }) => {
     return (
-         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="setting-card">
                 <h2 className="setting-title">المعلومات المكتسبة</h2>
                 <p className="text-sm text-gray-400 mb-4">هذه هي الأشياء التي تعلمها Nova عنك من خلال محادثاتكم لتحسين التجربة.</p>
@@ -1009,7 +1241,7 @@ const CodePreviewPanel: React.FC<{
     if (!isOpen) return null;
 
     return (
-        <aside ref={panelRef} style={{ width: `${width}px` }} className="bg-[#0a0a1a] flex flex-col border-l border-purple-500/20 shrink-0 relative animate-fade-in-right">
+        <aside ref={panelRef} style={{ width: `${width}px` }} className="bg-[#0a0a1a] flex-col border-l border-purple-500/20 shrink-0 relative animate-fade-in-right hidden md:flex">
             <div 
                 onMouseDown={handleMouseDown}
                 className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize z-30 group" 
@@ -1042,13 +1274,13 @@ const WelcomeScreen: React.FC<{ onPromptSelect: (prompt: string) => void }> = ({
     ];
 
     return (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-             <LogoIcon className="w-20 h-20 mb-4"/>
-            <h1 className="text-5xl font-bold mb-10 bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">مرحباً في Nova AI</h1>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 text-center">
+             <LogoIcon className="w-16 h-16 md:w-20 md:h-20 mb-4"/>
+            <h1 className="text-3xl md:text-5xl font-bold mb-8 md:mb-10 bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">مرحباً في Nova AI</h1>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-3xl">
                 {suggestions.map((s, i) => (
                     <button key={i} onClick={() => onPromptSelect(s.prompt)} className="suggestion-card">
-                        <h3 className="font-bold text-lg">{s.title}</h3>
+                        <h3 className="font-bold text-md md:text-lg">{s.title}</h3>
                         <p className="text-sm text-gray-400">{s.prompt}</p>
                     </button>
                 ))}
@@ -1067,7 +1299,8 @@ const MainChatInterface: React.FC<{
     onAddKnowledgeFile: (file: File) => void;
     onDeleteKnowledgeFile: (index: number) => void;
     onUpdateMessageContent: (messageId: string, newContent: RichContent) => void;
-}> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent }) => {
+    onToggleDrawer: () => void;
+}> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer }) => {
     const [showSettings, setShowSettings] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const settingsRef = useRef<HTMLDivElement>(null);
@@ -1097,19 +1330,24 @@ const MainChatInterface: React.FC<{
     return (
         <>
             <header className="p-4 flex justify-between items-center shrink-0 z-10 border-b border-purple-500/10">
-                <div className="flex-1">
-                    <h2 className="font-bold truncate" title={session.title}>{session.title}</h2>
-                    {session.knowledgeFiles && session.knowledgeFiles.length > 0 && (
-                        <div className="flex gap-2 mt-1 flex-wrap">
-                            {session.knowledgeFiles.map((file, index) => (
-                                <div key={index} className="bg-purple-500/20 text-xs px-2 py-1 rounded-full flex items-center gap-1.5">
-                                    <FileTextIcon />
-                                    <span className="truncate max-w-[100px]">{file.name}</span>
-                                    <button onClick={() => onDeleteKnowledgeFile(index)} className="text-gray-400 hover:text-white"><CloseIcon/></button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                 <div className="flex items-center gap-2">
+                    <button onClick={onToggleDrawer} className="p-2 rounded-full hover:bg-purple-500/20 lg:hidden">
+                        <i className="fas fa-bars"></i>
+                    </button>
+                    <div className="flex-1">
+                        <h2 className="font-bold truncate" title={session.title}>{session.title}</h2>
+                        {session.knowledgeFiles && session.knowledgeFiles.length > 0 && (
+                            <div className="flex gap-2 mt-1 flex-wrap">
+                                {session.knowledgeFiles.map((file, index) => (
+                                    <div key={index} className="bg-purple-500/20 text-xs px-2 py-1 rounded-full flex items-center gap-1.5">
+                                        <FileTextIcon />
+                                        <span className="truncate max-w-[100px]">{file.name}</span>
+                                        <button onClick={() => onDeleteKnowledgeFile(index)} className="text-gray-400 hover:text-white"><CloseIcon/></button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div className="relative flex items-center gap-2" ref={settingsRef}>
                     <input type="file" ref={knowledgeFileInputRef} onChange={handleKnowledgeFileChange} className="hidden" accept=".pdf,.txt,.md,.csv,.xlsx,.xls" />
@@ -1118,7 +1356,7 @@ const MainChatInterface: React.FC<{
                     {showSettings && <SettingsPopover settings={session.settings} onChange={onSettingsChange} />}
                 </div>
             </header>
-            <div className="flex-1 h-[1px] p-6 overflow-y-auto flex flex-col gap-6">
+            <div className="flex-1 h-[1px] p-2 md:p-6 overflow-y-auto flex flex-col gap-6">
                 {session.messages.map(msg => <MessageBubble key={msg.id} message={msg} onSaveMemory={onSaveMemory} onPreviewCode={onPreviewCode} onUpdateMessageContent={onUpdateMessageContent} />)}
                 {isLoading && (
                     <div className="self-start flex items-center gap-2 p-4">
@@ -1215,10 +1453,11 @@ const ChatView: React.FC<{
     createTempSession: () => void;
     temporarySession: ChatSession | null;
     setTemporarySession: React.Dispatch<React.SetStateAction<ChatSession | null>>;
+    onToggleDrawer: () => void;
 }> = ({ 
     globalSettings, userProfile, generalMemories, savedMemories, customTools, onUpdateUserProfile, onSaveMemory, 
     sessions, setSessions, activeId, setActiveId, createNewSession, createTempSession,
-    temporarySession, setTemporarySession
+    temporarySession, setTemporarySession, onToggleDrawer
 }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState>({ isOpen: false, isCollapsed: false, name: '', type: 'unsupported', content: null });
@@ -1378,7 +1617,7 @@ const ChatView: React.FC<{
                 // To prevent parsing malformed JSON during streaming, we parse only at the end.
                 const potentialJson = fullResponse.substring(fullResponse.indexOf('{'), fullResponse.lastIndexOf('}') + 1);
                 const parsed = JSON.parse(potentialJson);
-                if (parsed.type && ['table', 'chart', 'report', 'news_report'].includes(parsed.type)) {
+                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project'].includes(parsed.type)) {
                     finalContent = parsed;
                 }
             } catch (e) { /* Not a JSON, treat as text */ }
@@ -1513,6 +1752,7 @@ const ChatView: React.FC<{
                         onAddKnowledgeFile={handleAddKnowledgeFile}
                         onDeleteKnowledgeFile={handleDeleteKnowledgeFile}
                         onUpdateMessageContent={handleUpdateMessageContent}
+                        onToggleDrawer={onToggleDrawer}
                     />
                  )}
                  <ChatInputBar 
@@ -1530,23 +1770,23 @@ const ChatView: React.FC<{
 
 const Modal: React.FC<{ children: React.ReactNode, title: string, onClose: () => void, size?: 'md' | 'lg' | 'xl' | '3xl' | '5xl' }> = ({ children, title, onClose, size = 'md' }) => {
     const sizeClasses = {
-        md: 'max-w-md',
-        lg: 'max-w-lg',
-        xl: 'max-w-xl',
-        '3xl': 'max-w-3xl',
-        '5xl': 'max-w-5xl',
+        md: 'md:max-w-md',
+        lg: 'md:max-w-lg',
+        xl: 'md:max-w-xl',
+        '3xl': 'md:max-w-3xl',
+        '5xl': 'md:max-w-5xl',
     };
     
     const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
     return (
-        <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-            <div className={`bg-[#0c0c1f] border border-purple-500/30 rounded-2xl shadow-2xl w-full ${sizeClasses[size]} flex flex-col max-h-[90vh]`} onClick={stopPropagation}>
+        <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-0 md:p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+            <div className={`bg-[#0c0c1f] border-purple-500/30 w-full h-full md:w-full md:h-auto md:border md:rounded-2xl shadow-2xl ${sizeClasses[size]} flex flex-col md:max-h-[90vh]`} onClick={stopPropagation}>
                 <div className="flex justify-between items-center p-4 border-b border-purple-500/30 shrink-0">
                     <h2 className="text-xl font-bold">{title}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white"><CloseIcon /></button>
                 </div>
-                <div className="p-6 overflow-y-auto">
+                <div className="p-4 md:p-6 overflow-y-auto">
                     {children}
                 </div>
             </div>
@@ -1568,6 +1808,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [activeId, setActiveId] = useState<string | null>(null);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [temporarySession, setTemporarySession] = useState<ChatSession | null>(null);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     
     // Load data from local storage on mount
     useEffect(() => {
@@ -1730,11 +1971,15 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }, [globalSettings]);
 
     const renderActiveModal = () => {
+        if (currentView === View.CHAT) return null;
+
+        const handleClose = () => setCurrentView(View.CHAT);
+
         switch (currentView) {
             case View.IMAGE_STUDIO:
-                return <Modal title="استوديو الصور" onClose={() => setCurrentView(View.CHAT)} size="3xl"><ImageStudioView /></Modal>;
+                return <Modal title="استوديو الصور" onClose={handleClose} size="3xl"><ImageStudioView /></Modal>;
             case View.SETTINGS:
-                return <Modal title="الإعدادات" onClose={() => setCurrentView(View.CHAT)} size="3xl">
+                return <Modal title="الإعدادات" onClose={handleClose} size="3xl">
                     <SettingsView 
                         settings={globalSettings} 
                         onUpdate={handleUpdateSettings} 
@@ -1743,11 +1988,11 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                     />
                 </Modal>;
             case View.CREATE_TOOL:
-                return <Modal title="إدارة الأدوات" onClose={() => setCurrentView(View.CHAT)} size="5xl">
+                return <Modal title="إدارة الأدوات" onClose={handleClose} size="5xl">
                     <CreateToolView tools={customTools} onUpdateTools={handleUpdateTools} />
                 </Modal>;
             case View.PROFILE:
-                return <Modal title="الملف الشخصي والذاكرة" onClose={() => setCurrentView(View.CHAT)} size="5xl">
+                return <Modal title="الملف الشخصي والذاكرة" onClose={handleClose} size="5xl">
                     <ProfileView userProfile={userProfile} savedMemories={savedMemories} onDeleteMemory={handleDeleteMemory} />
                 </Modal>;
             default:
@@ -1758,9 +2003,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     return (
         <div className="w-full h-screen flex flex-row">
             <div className="flex-1 flex flex-col overflow-hidden relative">
-                <button onClick={() => setIsSidebarCollapsed(p => !p)} className="absolute top-4 right-4 w-10 h-10 bg-[#0c0c1f]/50 border border-purple-500/30 rounded-full flex items-center justify-center text-gray-400 hover:bg-purple-500/20 z-20 lg:hidden">
-                    <i className="fas fa-bars"></i>
-                </button>
                 <ChatView 
                     globalSettings={globalSettings} 
                     userProfile={userProfile} 
@@ -1777,66 +2019,98 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                     createTempSession={createTempSession}
                     temporarySession={temporarySession}
                     setTemporarySession={setTemporarySession}
+                    onToggleDrawer={() => setIsDrawerOpen(p => !p)}
                 />
                 {renderActiveModal()}
             </div>
-            <div className={`${isSidebarCollapsed ? 'hidden' : 'flex'} lg:flex`}>
-                <MainSidebar
-                    sessions={sessions}
-                    tools={customTools}
-                    activeId={activeId}
-                    onSelectSession={handleSetActiveSession}
-                    onNewChat={createNewSession}
-                    onNewTempChat={createTempSession}
-                    onDeleteSession={handleDeleteSession}
-                    isCollapsed={isSidebarCollapsed}
-                    onToggle={() => setIsSidebarCollapsed(p => !p)}
-                    currentView={currentView}
-                    onSetView={setCurrentView}
-                    onLogout={onLogout}
-                />
-            </div>
+            {isDrawerOpen && <div className="lg:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setIsDrawerOpen(false)} />}
+            <MainSidebar
+                sessions={sessions}
+                tools={customTools}
+                activeId={activeId}
+                onSelectSession={handleSetActiveSession}
+                onNewChat={createNewSession}
+                onNewTempChat={createTempSession}
+                onDeleteSession={handleDeleteSession}
+                isCollapsed={isSidebarCollapsed}
+                onToggleCollapse={() => setIsSidebarCollapsed(p => !p)}
+                currentView={currentView}
+                onSetView={setCurrentView}
+                onLogout={onLogout}
+                isDrawerOpen={isDrawerOpen}
+                onCloseDrawer={() => setIsDrawerOpen(false)}
+            />
         </div>
     );
 };
 
-const LandingPageHeader: React.FC<{ onAuthClick: (page: 'login' | 'signup') => void; onNavClick: (id: string) => void }> = ({ onAuthClick, onNavClick }) => (
-    <header className="bg-[#050510]/80 backdrop-blur-md px-[5%] py-4 fixed w-full top-0 z-50 flex justify-between items-center border-b border-[rgba(138,43,226,0.2)]">
-        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onNavClick('home')}>
-             <LogoIcon className="w-10 h-10"/>
-             <span className="text-2xl font-bold text-white">Nova AI</span>
-         </div>
-        <nav className="hidden md:flex list-none gap-8">
-            <a href="#home" onClick={(e) => {e.preventDefault(); onNavClick('home');}} className="nav-link">الرئيسية</a>
-            <a href="#features" onClick={(e) => {e.preventDefault(); onNavClick('features');}} className="nav-link">الميزات</a>
-            <a href="#start" onClick={(e) => {e.preventDefault(); onAuthClick('signup');}} className="nav-link">ابدأ المحادثة</a>
-        </nav>
-        <div className="flex gap-4">
-            <button onClick={() => onAuthClick('login')} className="btn-secondary">تسجيل الدخول</button>
-            <button onClick={() => onAuthClick('signup')} className="btn-primary">ابدأ مجاناً</button>
-        </div>
-    </header>
-);
+const LandingPageHeader: React.FC<{ onAuthClick: (page: 'login' | 'signup') => void; onNavClick: (id: string) => void }> = ({ onAuthClick, onNavClick }) => {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const navItems = [
+        { id: 'home', label: 'الرئيسية' },
+        { id: 'features', label: 'الميزات' },
+        { id: 'start', label: 'ابدأ المحادثة' },
+    ];
+    
+    const handleLinkClick = (id: string, isAuth: boolean = false) => {
+        setIsMenuOpen(false);
+        if (isAuth) {
+             onAuthClick('signup');
+        } else {
+            onNavClick(id);
+        }
+    }
+    
+    return (
+        <header className="bg-[#050510]/80 backdrop-blur-md px-[5%] py-4 fixed w-full top-0 z-50 flex justify-between items-center border-b border-[rgba(138,43,226,0.2)]">
+            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onNavClick('home')}>
+                 <LogoIcon className="w-10 h-10"/>
+                 <span className="text-2xl font-bold text-white">Nova AI</span>
+             </div>
+            <nav className="hidden md:flex list-none gap-8">
+                {navItems.map(item => (
+                    <a key={item.id} href={`#${item.id}`} onClick={(e) => { e.preventDefault(); handleLinkClick(item.id, item.id === 'start'); }} className="nav-link">{item.label}</a>
+                ))}
+            </nav>
+            <div className="hidden md:flex gap-4">
+                <button onClick={() => onAuthClick('login')} className="btn-secondary">تسجيل الدخول</button>
+                <button onClick={() => onAuthClick('signup')} className="btn-primary">ابدأ مجاناً</button>
+            </div>
+             <div className="md:hidden">
+                 <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-2xl">
+                     <i className="fas fa-bars"></i>
+                 </button>
+                 {isMenuOpen && (
+                     <div className="absolute top-full right-0 mt-2 w-full bg-[#0c0c1f] border-t border-purple-500/20 p-5 space-y-4">
+                         {navItems.map(item => (
+                            <a key={item.id} href={`#${item.id}`} onClick={(e) => { e.preventDefault(); handleLinkClick(item.id, item.id === 'start'); }} className="block text-center nav-link">{item.label}</a>
+                         ))}
+                         <div className="flex flex-col gap-4 pt-4 border-t border-purple-500/10">
+                             <button onClick={() => { setIsMenuOpen(false); onAuthClick('login'); }} className="btn-secondary w-full">تسجيل الدخول</button>
+                             <button onClick={() => { setIsMenuOpen(false); onAuthClick('signup'); }} className="btn-primary w-full">ابدأ مجاناً</button>
+                         </div>
+                     </div>
+                 )}
+            </div>
+        </header>
+    );
+};
+
 
 const Hero: React.FC<{ onCTAClick: () => void }> = ({ onCTAClick }) => (
      <section className="min-h-screen flex items-center justify-center pt-24 pb-12 px-[5%] relative overflow-hidden" id="home">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(138,43,226,0.15)_0%,transparent_50%)] -z-10"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(0,191,255,0.1)_0%,transparent_50%)] -z-10"></div>
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            <div className="text-center md:text-right">
-                <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">
-                    قوة الذكاء الاصطناعي في متناول يدك
-                </h1>
-                <p className="text-lg md:text-xl mb-8 text-[#c0c0ff] leading-relaxed">
-                    استكشف قوة Nova AI، وكيل الذكاء الاصطناعي المتقدم الذي يمكنه التفكير والتحليل والإبداع مثل البشر. احصل على حلول ذكية لجميع احتياجاتك من البحث في الإنترنت إلى توليد الصور وكتابة الأكواد.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                    <button onClick={onCTAClick} className="btn-primary">ابدأ الآن مجانًا</button>
-                    <button onClick={() => document.getElementById('features')?.scrollIntoView({behavior: 'smooth'})} className="btn-secondary">اكتشف الميزات</button>
-                </div>
-            </div>
-            <div className="flex items-center justify-center">
-                 <LogoIcon className="w-64 h-64 lg:w-96 lg:h-96 animate-pulse" style={{animationDuration: '5s'}} />
+        <div className="max-w-4xl mx-auto text-center">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">
+                قوة الذكاء الاصطناعي في متناول يدك
+            </h1>
+            <p className="text-lg md:text-xl mb-8 text-[#c0c0ff] leading-relaxed">
+                استكشف قوة Nova AI، وكيل الذكاء الاصطناعي المتقدم الذي يمكنه التفكير والتحليل والإبداع مثل البشر. احصل على حلول ذكية لجميع احتياجاتك من البحث في الإنترنت إلى توليد الصور وكتابة الأكواد.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button onClick={onCTAClick} className="btn-primary">ابدأ الآن مجانًا</button>
+                <button onClick={() => document.getElementById('features')?.scrollIntoView({behavior: 'smooth'})} className="btn-secondary">اكتشف الميزات</button>
             </div>
         </div>
     </section>
@@ -1852,13 +2126,13 @@ const Features: React.FC = () => {
     return (
         <section className="py-20 px-[5%] bg-[#050510]" id="features">
             <div className="max-w-6xl mx-auto text-center">
-                <h2 className="text-4xl font-bold mb-4">كل ما تحتاجه في مكان واحد</h2>
+                <h2 className="text-3xl md:text-4xl font-bold mb-4">كل ما تحتاجه في مكان واحد</h2>
                 <p className="text-lg text-gray-400 mb-12">Nova AI ليس مجرد مساعد، بل هو شريكك الإبداعي والتحليلي.</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                     {featureList.map((feature, i) => (
                          <div key={i} className="feature-card">
                             <div className="text-4xl text-purple-400 mb-4">{feature.icon}</div>
-                            <h3 className="text-2xl font-bold mb-2">{feature.title}</h3>
+                            <h3 className="text-xl md:text-2xl font-bold mb-2">{feature.title}</h3>
                             <p className="text-gray-300">{feature.description}</p>
                         </div>
                     ))}
@@ -2047,6 +2321,28 @@ const App: React.FC = () => {
                     color: #374151;
                     white-space: pre-wrap;
                 }
+                /* Resume View Styles */
+                .resume-view { background-color: #fff; color: #333; font-family: 'Segoe UI', sans-serif; padding: 1rem; md:padding: 2rem; direction: rtl; text-align: right; }
+                .resume-header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+                .resume-header h1 { font-size: 2rem; md:font-size: 2.5rem; font-weight: 700; color: #8a2be2; margin: 0; }
+                .resume-header h2 { font-size: 1.1rem; md:font-size: 1.25rem; font-weight: 400; color: #555; margin: 0.25rem 0; }
+                .resume-contact { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 1.5rem; font-size: 0.8rem; md:font-size: 0.9rem; color: #444; margin-top: 0.75rem; }
+                .resume-contact span { display: flex; align-items: center; gap: 0.5rem; }
+                .resume-body { display: grid; grid-template-columns: 1fr; md:grid-template-columns: 2fr 1fr; gap: 1.5rem; md:gap: 2rem; }
+                .resume-section h3 { font-size: 1.2rem; md:font-size: 1.4rem; font-weight: 600; color: #333; border-bottom: 2px solid #8a2be2; padding-bottom: 0.5rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+                .resume-item { margin-bottom: 1.25rem; }
+                .resume-item h4 { font-size: 1rem; md:font-size: 1.1rem; font-weight: 600; margin-bottom: 0.1rem; }
+                .resume-item h5 { font-size: 0.9rem; md:font-size: 1rem; font-weight: 500; color: #555; margin-bottom: 0.2rem; }
+                .resume-item h6 { font-size: 0.8rem; md:font-size: 0.9rem; font-style: italic; color: #777; margin-bottom: 0.5rem; }
+                .resume-item ul { list-style-position: outside; padding-right: 1.2rem; margin: 0; font-size: 0.9rem; md:font-size: 0.95rem; line-height: 1.6; }
+                .resume-item p, .resume-section p { font-size: 0.9rem; md:font-size: 0.95rem; line-height: 1.6; color: #444; }
+                .resume-sidebar { border-right: none; md:border-right: 1px solid #eee; padding-right: 0; md:padding-right: 2rem; border-top: 1px solid #eee; md:border-top: none; padding-top: 1rem; md:padding-top: 0; }
+                
+                /* Code Project View Styles */
+                .code-project-view { padding: 0.5rem; }
+                .review-section { background: rgba(10, 10, 26, 0.7); padding: 1rem; border-radius: 0.5rem; border-left: 3px solid #8a2be2; }
+                .review-title { font-size: 1.1rem; font-weight: 700; color: #c0c0ff; margin-bottom: 0.5rem; display: flex; align-items: center;}
+                .review-section p, .review-section li { font-size: 0.9rem; color: #e0e0ff; }
             `}</style>
         </>
     );

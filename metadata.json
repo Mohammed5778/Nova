@@ -1,8 +1,6 @@
 {
-  "name": "Copy of Copy of Nova edit",
-  "description": "A multi-screen conversational AI chat application powered by Gemini, designed for mobile.",
-  "requestFramePermissions": [
-    "microphone"
-  ],
+  "name": "Copy of Copy of Nova AI",
+  "description": "An advanced AI agent that can think, analyze, and create like a human. It provides smart solutions for all needs, including internet search, deep reasoning, coding, scientific research, and media generation.",
+  "requestFramePermissions": [],
   "prompt": ""
 }

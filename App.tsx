@@ -67,9 +67,21 @@ interface CodeProjectContent {
     files: { filename: string; language: string; code: string; }[];
     review: { overview: string; strengths: string[]; improvements: string[]; nextSteps: string[]; };
 }
+interface StudyExplanationContent { type: 'study_explanation'; topic: string; explanation: string; }
+interface StudyReviewContent { type: 'study_review'; topic: string; review: { title: string; points: string[] }; }
+interface StudyQuizContent {
+    type: 'study_quiz';
+    topic: string;
+    quiz: {
+        type: 'multiple_choice' | 'short_answer';
+        question: string;
+        options?: string[];
+        correctAnswer: string | number;
+    }[];
+}
 
 
-type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent;
+type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent | StudyExplanationContent | StudyReviewContent | StudyQuizContent;
 
 
 interface Message {
@@ -536,6 +548,195 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
     );
 };
 
+// --- STUDY MODE COMPONENTS ---
+
+const RichMarkdownRenderer: React.FC<{ markdown: string, onPreviewCode: (code: string, language: string) => void }> = ({ markdown, onPreviewCode }) => {
+    const parts = markdown.split(/(```[\s\S]*?```|\$\$[\s\S]*?\$\$|\|(?:[^|\r\n]*\|)+)/g).filter(Boolean);
+
+    return (
+        <div>
+            {parts.map((part, index) => {
+                if (part.startsWith('```')) {
+                    const codeMatch = part.match(/```(\w*)\n([\s\S]+)\n```/);
+                    if (codeMatch) {
+                        const language = codeMatch[1] || 'plaintext';
+                        const code = codeMatch[2].trim();
+                        return <CodeBlock key={index} language={language} code={code} onPreview={onPreviewCode} />;
+                    }
+                }
+                if (part.startsWith('$$') && part.endsWith('$$')) {
+                    const math = part.substring(2, part.length - 2).trim();
+                    return (
+                        <div key={index} className="p-4 my-2 bg-black/30 rounded-lg text-center text-lg font-mono text-purple-300 overflow-x-auto" dir="ltr">
+                            {math}
+                        </div>
+                    );
+                }
+                if (part.startsWith('|')) {
+                    const rows = part.split('\n').filter(row => row.includes('|'));
+                    const tableData = rows.map(row => row.split('|').map(cell => cell.trim()).slice(1, -1));
+                    if (tableData.length < 2) return <p key={index}>{part}</p>; // Not a valid table
+
+                    const header = tableData[0];
+                    const body = tableData.slice(2); // Skip header and separator line
+                    return (
+                        <div key={index} className="overflow-x-auto my-4">
+                            <table className="w-full text-sm text-left border-collapse markdown-table">
+                                <thead>
+                                    <tr>
+                                        {header.map((cell, i) => <th key={i}>{cell}</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {body.map((row, i) => (
+                                        <tr key={i}>
+                                            {row.map((cell, j) => <td key={j}>{cell}</td>)}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    );
+                }
+                // Handle simple text, headings, and lists
+                return part.split('\n').map((line, lineIndex) => {
+                    if (line.startsWith('### ')) return <h4 key={`${index}-${lineIndex}`} className="text-lg font-bold mt-4 mb-2">{line.substring(4)}</h4>;
+                    if (line.startsWith('## ')) return <h3 key={`${index}-${lineIndex}`} className="text-xl font-bold mt-5 mb-3 text-purple-300">{line.substring(3)}</h3>;
+                    if (line.startsWith('# ')) return <h2 key={`${index}-${lineIndex}`} className="text-2xl font-bold mt-6 mb-4 text-purple-200">{line.substring(2)}</h2>;
+                    if (line.startsWith('- ') || line.startsWith('* ')) return <li key={`${index}-${lineIndex}`} className="ml-5">{line.substring(2)}</li>
+                    if (line.trim() === '') return null;
+                    return <p key={`${index}-${lineIndex}`} className="my-2 leading-relaxed">{line}</p>;
+                });
+            })}
+        </div>
+    );
+};
+
+const StudyExplanationView: React.FC<{
+    data: StudyExplanationContent;
+    onFollowUp: (type: 'review' | 'quiz', topic: string) => void;
+    onPreviewCode: (code: string, language: string) => void;
+}> = ({ data, onFollowUp, onPreviewCode }) => {
+    return (
+        <div className="study-session-view">
+            <h2 className="study-topic-title"><i className="fas fa-graduation-cap mr-3"></i> جلسة مذاكرة: {data.topic}</h2>
+            <div className="study-section">
+                <h3 className="study-section-title">الشرح</h3>
+                <div className="explanation-block">
+                    <RichMarkdownRenderer markdown={data.explanation} onPreviewCode={onPreviewCode} />
+                </div>
+            </div>
+            <div className="mt-6 p-4 bg-purple-900/50 rounded-lg flex flex-col md:flex-row items-center justify-center gap-4">
+                <p className="font-bold">هل أنت مستعد للخطوة التالية؟</p>
+                <div className="flex gap-4">
+                    <button onClick={() => onFollowUp('review', data.topic)} className="btn-secondary">إنشاء مراجعة</button>
+                    <button onClick={() => onFollowUp('quiz', data.topic)} className="btn-primary">إنشاء اختبار</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const StudyReviewView: React.FC<{ data: StudyReviewContent }> = ({ data }) => {
+    return (
+        <div className="study-session-view mt-4">
+             <div className="study-section">
+                <h3 className="study-section-title">المراجعة</h3>
+                <div className="review-block">
+                    <h4>{data.review.title}</h4>
+                    <ul className="list-disc pl-5 space-y-1">
+                        {data.review.points.map((point, i) => <li key={i}>{point}</li>)}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const StudyQuizView: React.FC<{ data: StudyQuizContent }> = ({ data }) => {
+    const { quiz } = data;
+    const [userAnswers, setUserAnswers] = useState<Record<number, string | number>>({});
+    const [submitted, setSubmitted] = useState(false);
+    const [score, setScore] = useState(0);
+
+    const handleAnswerChange = (quizIndex: number, answer: string | number) => {
+        setUserAnswers(prev => ({ ...prev, [quizIndex]: answer }));
+    };
+
+    const handleSubmit = () => {
+        let correctCount = 0;
+        quiz.forEach((q, i) => {
+            const userAnswer = userAnswers[i];
+            if (q.type === 'multiple_choice') {
+                const correctIndex = typeof q.correctAnswer === 'number' ? q.correctAnswer : q.options?.findIndex(opt => opt === q.correctAnswer);
+                if (userAnswer !== undefined && parseInt(userAnswer as string) === correctIndex) {
+                    correctCount++;
+                }
+            } else { // short_answer
+                if (userAnswer && (userAnswer as string).trim().toLowerCase() === (q.correctAnswer as string).toLowerCase()) {
+                    correctCount++;
+                }
+            }
+        });
+        setScore(correctCount);
+        setSubmitted(true);
+    };
+
+    const getAnswerClasses = (q: any, optionIndex: number, quizIndex: number) => {
+        const isSelectedByUser = userAnswers[quizIndex] !== undefined && parseInt(userAnswers[quizIndex] as string) === optionIndex;
+
+        if (submitted) {
+            const correctIndex = typeof q.correctAnswer === 'number' ? q.correctAnswer : q.options?.findIndex(opt => opt === q.correctAnswer);
+            const isCorrectOption = optionIndex === correctIndex;
+
+            if (isCorrectOption) return 'bg-green-500/70 text-white';
+            if (isSelectedByUser && !isCorrectOption) return 'bg-red-500/70 text-white';
+            return 'bg-gray-800/80';
+        }
+        return isSelectedByUser ? 'bg-purple-600 text-white' : 'hover:bg-purple-700/50 bg-gray-800/80';
+    };
+
+    return (
+        <div className="study-session-view mt-4">
+             <div className="study-section">
+                <h3 className="study-section-title">اختبار قصير: {data.topic}</h3>
+                <div className="quiz-block">
+                    {quiz.map((q, i) => (
+                        <div key={i} className="quiz-question">
+                            <p className="font-bold">{i + 1}. {q.question}</p>
+                            {q.type === 'multiple_choice' && q.options && (
+                                <div className="space-y-2 mt-2">
+                                    {q.options.map((option, j) => (
+                                        <label key={j} className={`block p-3 rounded-lg cursor-pointer transition-colors ${getAnswerClasses(q, j, i)}`}>
+                                            <input type="radio" name={`quiz-${i}`} value={j} onChange={() => handleAnswerChange(i, j)} className="hidden" disabled={submitted} />
+                                            {option}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                            {q.type === 'short_answer' && (
+                                <div className="mt-2">
+                                     <input type="text" onChange={(e) => handleAnswerChange(i, e.target.value)} className={`w-full p-2 rounded bg-gray-900/80 border border-purple-500/30 focus:ring-purple-500 focus:border-purple-500 ${ submitted ? ((userAnswers[i] as string || '').trim().toLowerCase() === (q.correctAnswer as string).toLowerCase() ? 'bg-green-900/50 border-green-500' : 'bg-red-900/50 border-red-500') : '' }`} disabled={submitted} />
+                                    {submitted && ((userAnswers[i] as string || '').trim().toLowerCase() !== (q.correctAnswer as string).toLowerCase()) && <p className="text-xs text-green-400 mt-1">الإجابة الصحيحة: {q.correctAnswer}</p>}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {!submitted ? (
+                        <button onClick={handleSubmit} className="btn-primary mt-6 w-full">عرض النتيجة</button>
+                    ) : (
+                        <div className="mt-6 p-4 bg-purple-900/50 rounded-lg text-center">
+                            <h4 className="text-xl font-bold">نتيجتك</h4>
+                            <p className="text-3xl font-bold my-2">{score} / {quiz.length}</p>
+                            <button onClick={() => { setSubmitted(false); setUserAnswers({})}} className="btn-secondary !text-sm mt-2">أعد الاختبار</button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 // --- UI & VIEW COMPONENTS ---
 
@@ -572,7 +773,13 @@ const CodeBlock: React.FC<{ code: string; language: string; onPreview: (code: st
     );
 };
 
-const MessageBubble: React.FC<{ message: Message, onSaveMemory: (message: Message) => void, onPreviewCode: (code: string, language: string) => void, onUpdateMessageContent: (messageId: string, newContent: RichContent) => void }> = ({ message, onSaveMemory, onPreviewCode, onUpdateMessageContent }) => {
+const MessageBubble: React.FC<{ 
+    message: Message, 
+    onSaveMemory: (message: Message) => void, 
+    onPreviewCode: (code: string, language: string) => void, 
+    onUpdateMessageContent: (messageId: string, newContent: RichContent) => void,
+    onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void 
+}> = ({ message, onSaveMemory, onPreviewCode, onUpdateMessageContent, onStudyFollowUp }) => {
     const isUser = message.role === 'user';
     const alignClass = isUser ? 'self-end' : 'self-start';
     const bgClass = isUser
@@ -625,6 +832,9 @@ const MessageBubble: React.FC<{ message: Message, onSaveMemory: (message: Messag
                 case 'news_report': return <NewsReportView {...richContent} />;
                 case 'resume': return <ResumeView resume={richContent} />;
                 case 'code_project': return <CodeProjectView project={richContent} onPreviewCode={onPreviewCode} />;
+                case 'study_explanation': return <StudyExplanationView data={richContent} onFollowUp={onStudyFollowUp} onPreviewCode={onPreviewCode} />;
+                case 'study_review': return <StudyReviewView data={richContent} />;
+                case 'study_quiz': return <StudyQuizView data={richContent} />;
                 default: return <p>محتوى غير مدعوم.</p>;
             }
         }
@@ -677,13 +887,12 @@ const MainSidebar: React.FC<{
     onNewTempChat: () => void;
     onDeleteSession: (id: string) => void;
     isCollapsed: boolean;
-    onToggleCollapse: () => void;
     currentView: View;
     onSetView: (view: View) => void;
     onLogout: () => void;
     isDrawerOpen: boolean;
     onCloseDrawer: () => void;
-}> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, onToggleCollapse, currentView, onSetView, onLogout, isDrawerOpen, onCloseDrawer }) => {
+}> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, currentView, onSetView, onLogout, isDrawerOpen, onCloseDrawer }) => {
     const sortedSessions = Object.values(sessions).sort((a, b) => {
         const timeA = a.messages[a.messages.length - 1]?.id || '0';
         const timeB = b.messages[b.messages.length - 1]?.id || '0';
@@ -727,9 +936,6 @@ const MainSidebar: React.FC<{
 
     const sidebarContent = (isMobile: boolean) => (
          <>
-            <button onClick={onToggleCollapse} className="absolute top-1/2 -left-3 transform -translate-y-1/2 w-6 h-6 bg-[#0c0c1f] border border-purple-500/30 rounded-full hidden lg:flex items-center justify-center text-gray-400 hover:bg-purple-500/20 z-20">
-                {isCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
-            </button>
             {isMobile && (
                  <button onClick={onCloseDrawer} className="absolute top-4 left-4 text-gray-400 hover:text-white">
                     <CloseIcon />
@@ -938,7 +1144,7 @@ const SettingsView: React.FC<{
                         value={newMemory} 
                         onChange={e => setNewMemory(e.target.value)} 
                         placeholder="مثال: اسمي هو..." 
-                        className="flex-1 modal-input"
+                        className="modal-input"
                     />
                     <button onClick={handleAddMemory} className="btn-primary !px-6 !rounded-lg">حفظ</button>
                 </div>
@@ -1108,7 +1314,7 @@ const ProfileView: React.FC<{
                      ) : (
                         savedMemories.map(mem => (
                             <div key={mem.id} className="relative group/memory">
-                                <MessageBubble message={mem} onSaveMemory={() => {}} onPreviewCode={() => {}} onUpdateMessageContent={()=>{}}/>
+                                <MessageBubble message={mem} onSaveMemory={() => {}} onPreviewCode={() => {}} onUpdateMessageContent={()=>{}} onStudyFollowUp={() => {}}/>
                                 <button onClick={() => onDeleteMemory(mem.id)} title="حذف الذاكرة" className="absolute top-0 left-0 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center hover:scale-110 opacity-0 group-hover/memory:opacity-100 transition-opacity">
                                     <TrashIcon />
                                 </button>
@@ -1241,27 +1447,44 @@ const CodePreviewPanel: React.FC<{
     if (!isOpen) return null;
 
     return (
-        <aside ref={panelRef} style={{ width: `${width}px` }} className="bg-[#0a0a1a] flex-col border-l border-purple-500/20 shrink-0 relative animate-fade-in-right hidden md:flex">
-            <div 
-                onMouseDown={handleMouseDown}
-                className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize z-30 group" 
-            >
-                <div className="w-full h-full bg-purple-500/0 group-hover:bg-purple-500/50 transition-colors duration-300"></div>
-            </div>
+        <>
+            {/* Desktop Resizable Panel */}
+            <aside ref={panelRef} style={{ width: `${width}px` }} className="bg-[#0a0a1a] flex-col border-l border-purple-500/20 shrink-0 relative animate-fade-in-right hidden md:flex">
+                <div 
+                    onMouseDown={handleMouseDown}
+                    className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize z-30 group" 
+                >
+                    <div className="w-full h-full bg-purple-500/0 group-hover:bg-purple-500/50 transition-colors duration-300"></div>
+                </div>
 
-            <div className="p-3 flex justify-between items-center bg-[#1e1e3e] border-b border-purple-500/30 shrink-0">
-                <h3 className="font-bold">معاينة الكود</h3>
-                <button onClick={onClose} className="p-1 rounded-md hover:bg-red-500/30"><CloseIcon/></button>
+                <div className="p-3 flex justify-between items-center bg-[#1e1e3e] border-b border-purple-500/30 shrink-0">
+                    <h3 className="font-bold">معاينة الكود</h3>
+                    <button onClick={onClose} className="p-1 rounded-md hover:bg-red-500/30"><CloseIcon/></button>
+                </div>
+                <div className="flex-1 bg-white overflow-hidden">
+                     <iframe 
+                        srcDoc={code} 
+                        title="Code Preview" 
+                        className="w-full h-full border-0"
+                        sandbox="allow-scripts allow-same-origin"
+                    />
+                </div>
+            </aside>
+            
+            {/* Mobile Modal View */}
+            <div className="md:hidden">
+                <Modal title="معاينة الكود" onClose={onClose} size="3xl">
+                     <div className="w-full h-[75vh] bg-white rounded-lg overflow-hidden">
+                        <iframe 
+                            srcDoc={code} 
+                            title="Mobile Code Preview" 
+                            className="w-full h-full border-0"
+                            sandbox="allow-scripts allow-same-origin"
+                        />
+                    </div>
+                </Modal>
             </div>
-            <div className="flex-1 bg-white overflow-hidden">
-                 <iframe 
-                    srcDoc={code} 
-                    title="Code Preview" 
-                    className="w-full h-full border-0"
-                    sandbox="allow-scripts allow-same-origin"
-                />
-            </div>
-        </aside>
+        </>
     );
 };
 
@@ -1300,7 +1523,8 @@ const MainChatInterface: React.FC<{
     onDeleteKnowledgeFile: (index: number) => void;
     onUpdateMessageContent: (messageId: string, newContent: RichContent) => void;
     onToggleDrawer: () => void;
-}> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer }) => {
+    onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void;
+}> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer, onStudyFollowUp }) => {
     const [showSettings, setShowSettings] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const settingsRef = useRef<HTMLDivElement>(null);
@@ -1357,7 +1581,7 @@ const MainChatInterface: React.FC<{
                 </div>
             </header>
             <div className="flex-1 h-[1px] p-2 md:p-6 overflow-y-auto flex flex-col gap-6">
-                {session.messages.map(msg => <MessageBubble key={msg.id} message={msg} onSaveMemory={onSaveMemory} onPreviewCode={onPreviewCode} onUpdateMessageContent={onUpdateMessageContent} />)}
+                {session.messages.map(msg => <MessageBubble key={msg.id} message={msg} onSaveMemory={onSaveMemory} onPreviewCode={onPreviewCode} onUpdateMessageContent={onUpdateMessageContent} onStudyFollowUp={onStudyFollowUp} />)}
                 {isLoading && (
                     <div className="self-start flex items-center gap-2 p-4">
                         <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-0"></div>
@@ -1617,7 +1841,7 @@ const ChatView: React.FC<{
                 // To prevent parsing malformed JSON during streaming, we parse only at the end.
                 const potentialJson = fullResponse.substring(fullResponse.indexOf('{'), fullResponse.lastIndexOf('}') + 1);
                 const parsed = JSON.parse(potentialJson);
-                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project'].includes(parsed.type)) {
+                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project', 'study_explanation', 'study_review', 'study_quiz'].includes(parsed.type)) {
                     finalContent = parsed;
                 }
             } catch (e) { /* Not a JSON, treat as text */ }
@@ -1729,6 +1953,13 @@ const ChatView: React.FC<{
             setSessions(s => ({ ...s, [activeId]: updater(s[activeId])! }));
         }
     };
+    
+    const handleStudyFollowUp = (type: 'review' | 'quiz', topic: string) => {
+        const prompt = type === 'review' 
+            ? `يرجى إنشاء مراجعة للموضوع التالي: ${topic}` 
+            : `يرجى إنشاء اختبار حول الموضوع التالي: ${topic}`;
+        handleSendMessage(prompt);
+    };
 
     const activeSession = isTempChat ? temporarySession : (activeId ? sessions[activeId] : null);
 
@@ -1753,6 +1984,7 @@ const ChatView: React.FC<{
                         onDeleteKnowledgeFile={handleDeleteKnowledgeFile}
                         onUpdateMessageContent={handleUpdateMessageContent}
                         onToggleDrawer={onToggleDrawer}
+                        onStudyFollowUp={handleStudyFollowUp}
                     />
                  )}
                  <ChatInputBar 
@@ -1818,7 +2050,19 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                 if (savedSettings) setGlobalSettings(JSON.parse(savedSettings));
 
                 const savedTools = localStorage.getItem('nova-custom-tools');
-                if (savedTools) setCustomTools(JSON.parse(savedTools));
+                if (savedTools) {
+                    setCustomTools(JSON.parse(savedTools));
+                } else {
+                    // Create a default tool if none exist
+                    const defaultTool: CustomTool = {
+                        id: 'default-study-buddy',
+                        name: 'رفيق المذاكرة',
+                        icon: '🎓',
+                        prompt: "You are a master tutor AI. When a user asks to study a topic, your first response MUST be a JSON object of type `study_explanation`. The `explanation` field should be a detailed, well-formatted string using Markdown for structure, headings, lists, tables, code blocks (` ``` `), and LaTeX math formulas (`$$...$$`). After providing the explanation, you will wait for the user to request a 'review' or a 'quiz'. If they ask for a review, respond with a `study_review` JSON. If they ask for a quiz, respond with a `study_quiz` JSON. Do not include any text outside the JSON object.",
+                    };
+                    setCustomTools([defaultTool]);
+                    localStorage.setItem('nova-custom-tools', JSON.stringify([defaultTool]));
+                }
 
                 const savedProfile = localStorage.getItem('nova-user-profile');
                 if (savedProfile) setUserProfile(JSON.parse(savedProfile));
@@ -2001,8 +2245,11 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     };
 
     return (
-        <div className="w-full h-screen flex flex-row">
+        <div className="w-full h-full flex flex-row">
             <div className="flex-1 flex flex-col overflow-hidden relative">
+                <button onClick={() => setIsSidebarCollapsed(p => !p)} className="absolute top-1/2 -translate-y-1/2 left-4 w-7 h-7 bg-[#0c0c1f] border border-purple-500/30 rounded-full hidden lg:flex items-center justify-center text-gray-400 hover:bg-purple-500/20 z-20">
+                    {isSidebarCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+                </button>
                 <ChatView 
                     globalSettings={globalSettings} 
                     userProfile={userProfile} 
@@ -2033,7 +2280,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                 onNewTempChat={createTempSession}
                 onDeleteSession={handleDeleteSession}
                 isCollapsed={isSidebarCollapsed}
-                onToggleCollapse={() => setIsSidebarCollapsed(p => !p)}
                 currentView={currentView}
                 onSetView={setCurrentView}
                 onLogout={onLogout}
@@ -2206,7 +2452,7 @@ const LandingPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess 
     };
 
     return (
-        <div className="h-screen overflow-y-auto bg-[#050510]">
+        <div className="h-full overflow-y-auto bg-[#050510]">
             <LandingPageHeader onAuthClick={handleAuthNav} onNavClick={handleNavClick} />
             <main>
                 <Hero onCTAClick={() => handleAuthNav('signup')} />
@@ -2343,6 +2589,20 @@ const App: React.FC = () => {
                 .review-section { background: rgba(10, 10, 26, 0.7); padding: 1rem; border-radius: 0.5rem; border-left: 3px solid #8a2be2; }
                 .review-title { font-size: 1.1rem; font-weight: 700; color: #c0c0ff; margin-bottom: 0.5rem; display: flex; align-items: center;}
                 .review-section p, .review-section li { font-size: 0.9rem; color: #e0e0ff; }
+
+                /* Study Session View Styles */
+                .study-session-view { background: rgba(10, 10, 26, 0.7); border: 1px solid rgba(138, 43, 226, 0.2); border-radius: 0.75rem; padding: 1rem 1.5rem; }
+                .study-topic-title { font-size: 1.75rem; font-weight: 700; color: #d8b4fe; border-bottom: 2px solid rgba(138, 43, 226, 0.3); padding-bottom: 0.75rem; margin-bottom: 1.5rem; }
+                .study-section { margin-bottom: 2rem; }
+                .study-section-title { font-size: 1.25rem; font-weight: 600; color: #c084fc; margin-bottom: 1rem; }
+                .explanation-block, .review-block, .quiz-block { background: rgba(0,0,0,0.2); padding: 1.25rem; border-radius: 0.5rem; }
+                .explanation-block p { color: #e0e0ff; line-height: 1.7; }
+                .quiz-question { background: rgba(30,30,62,0.6); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+                .markdown-table { border-collapse: collapse; width: 100%; margin-top: 1em; margin-bottom: 1em; border: 1px solid #4a044e; }
+                .markdown-table th, .markdown-table td { border: 1px solid #4a044e; padding: 0.5rem 0.75rem; }
+                .markdown-table th { background-color: #2c1a42; font-weight: bold; color: #d8b4fe; }
+                .markdown-table tr:nth-child(even) { background-color: rgba(30,30,62,0.4); }
+
             `}</style>
         </>
     );

@@ -110,19 +110,12 @@ function buildGeniusAgentInstruction(
     activeTool: CustomTool | undefined,
     sessionKnowledge: { name: string; content: string }[],
     savedMemories: Message[],
-    relevantHistoryContext: string,
-    language: 'ar' | 'en'
+    relevantHistoryContext: string
 ): string {
-    let instruction = language === 'ar' 
-        ? "You are Nova AI, a genius-level AI agent. Your primary language is Arabic. You don't just answer questions; you perform tasks. Analyze the user's request and provide the most effective output."
-        : "You are Nova AI, a genius-level AI agent. Your primary language is English. You don't just answer questions; you perform tasks. Analyze the user's request and provide the most effective output.";
+    let instruction = "You are Nova AI, a genius-level AI agent. Your primary language is Arabic. You don't just answer questions; you perform tasks. Analyze the user's request and provide the most effective output.";
     
     if (activeTool) {
         instruction = activeTool.prompt; // Tool prompt takes highest precedence
-        // Add language instruction to tool prompt if not present
-        if (!/primary language is (Arabic|English)/i.test(instruction)) {
-            instruction += ` Your primary language for responding is ${language === 'ar' ? 'Arabic' : 'English'}.`;
-        }
     }
     
     instruction += `\n\n**Core Task Directives & Rich Content Formatting:**
@@ -203,8 +196,7 @@ export async function getAiResponseStream(
     activeTool: CustomTool | undefined,
     allSessions: Record<string, ChatSession>,
     savedMemories: Message[],
-    sessionKnowledge: { name: string; content: string }[],
-    language: 'ar' | 'en'
+    sessionKnowledge: { name: string; content: string }[]
 ) {
     const modelName = 'gemini-2.5-flash';
 
@@ -228,8 +220,7 @@ export async function getAiResponseStream(
         activeTool, 
         sessionKnowledge,
         savedMemories,
-        relevantHistoryContext,
-        language
+        relevantHistoryContext
     );
 
     const request = {
@@ -261,7 +252,7 @@ export async function generateImage(
 ): Promise<string[]> {
     const response = await ai.models.generateImages({
         model: 'imagen-3.0-generate-002',
-        prompt: prompt,
+        prompt: `Create a high-quality, photorealistic image of: ${prompt}.`,
         config: {
           numberOfImages: numberOfImages,
           outputMimeType: 'image/png',
@@ -270,40 +261,6 @@ export async function generateImage(
     });
 
     return response.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
-}
-
-export async function enhancePromptForImage(originalPrompt: string, style: string): Promise<string> {
-    const styleInstructions: { [key: string]: string } = {
-        photorealistic: "ultra photorealistic, 8k, sharp focus, detailed, professional photography, high quality texture, canon eos r5",
-        cinematic: "cinematic lighting, movie still, film grain, dynamic composition, masterpiece, 8k, ultra-detailed, dramatic, emotional, color grading",
-        fantasy: "fantasy art, epic, mystical, glowing, intricate details, highly detailed, by artists like Greg Rutkowski and Artgerm, trending on Artstation",
-        anime: "anime style, key visual, vibrant colors, detailed illustration, by Makoto Shinkai and Studio Ghibli, beautiful scenery",
-        digital_art: "digital painting, concept art, smooth, sharp focus, illustration, artstation trending, beautiful, elegant",
-        '3d_model': "3D model, blender render, octane render, unreal engine 5, hyper-detailed, polished, realistic materials, 4k"
-    };
-
-    const enhancementPrompt = `
-    Translate and enhance the following user prompt into a single, cohesive, highly detailed English paragraph for a sophisticated AI image generator.
-    The final output MUST be in English.
-    The desired style is: "${style}".
-    Integrate these keywords to achieve the style: "${styleInstructions[style] || ''}".
-    The final prompt should be a creative and descriptive interpretation of the user's idea, fused with the stylistic elements.
-    ONLY return the final enhanced English prompt paragraph. Do not include any other text, explanations, or quotes.
-
-    User Prompt: "${originalPrompt}"
-    `;
-    
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: enhancementPrompt,
-        });
-        return response.text.trim();
-    } catch (e) {
-        console.error("Error enhancing prompt:", e);
-        // Fallback to simple translation/prefixing if enhancement fails
-        return `A ${style} image of ${originalPrompt}`; 
-    }
 }
 
 

@@ -1,16 +1,73 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { getAiResponseStream, generateImage as generateImageService, extractUserInfo } from './services/geminiService';
+import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
+import { getAiResponseStream, generateImage as generateImageService, extractUserInfo, enhancePromptForImage } from './services/geminiService';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
 import { Part } from '@google/genai';
 import Chart from 'chart.js/auto';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { translations, TranslationKey } from './translations';
 
 
 // SETUP PDF.js WORKER
 pdfjsLib.GlobalWorkerOptions.workerSrc = "pdfjs-dist/build/pdf.worker.mjs";
+
+
+// --- LANGUAGE PROVIDER & HOOK ---
+type Language = 'ar' | 'en';
+
+interface LanguageContextType {
+    language: Language;
+    setLanguage: (lang: Language) => void;
+    t: (key: TranslationKey, ...args: any[]) => string;
+}
+
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [language, setLanguageState] = useState<Language>(() => {
+        return (localStorage.getItem('nova-language') as Language) || 'ar';
+    });
+
+    const setLanguage = (lang: Language) => {
+        localStorage.setItem('nova-language', lang);
+        setLanguageState(lang);
+        // Set HTML lang attribute for accessibility
+        document.documentElement.lang = lang;
+    };
+
+    useEffect(() => {
+        document.documentElement.lang = language;
+    }, [language]);
+
+
+    const t = (key: TranslationKey, ...args: any[]): string => {
+        let translation = translations[language][key] || translations['en'][key] || key;
+        if (args.length > 0) {
+            args.forEach((arg, index) => {
+                translation = translation.replace(`{${index}}`, arg);
+            });
+        }
+        return translation;
+    };
+
+    return (
+        <LanguageContext.Provider value={{ language, setLanguage, t }}>
+            {children}
+        </LanguageContext.Provider>
+    );
+};
+
+const useLanguage = () => {
+    const context = useContext(LanguageContext);
+    if (!context) {
+        throw new Error('useLanguage must be used within a LanguageProvider');
+    }
+    return context;
+};
+
+
 
 // --- HELPERS ---
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
@@ -32,7 +89,7 @@ enum View {
 
 interface GlobalSettings {
     aiTone: 'friendly' | 'formal' | 'creative';
-    creativityLevel: 'focused' | 'balanced' | 'inventive';
+    creativityLevel: 'balanced' | 'focused' | 'inventive';
     defaultInternetSearch: boolean;
     defaultDeepThinking: boolean;
     defaultScientificMode: boolean;
@@ -122,6 +179,18 @@ interface FilePreviewState {
     url?: string;
 }
 
+interface ImageHistoryItem {
+    id: string;
+    urls: string[];
+    prompt: string;
+    enhancedPrompt: string;
+    model: 'gemini' | 'pollinations';
+    style: string;
+    aspectRatio: string;
+    timestamp: number;
+}
+
+
 // --- ICONS ---
 const LogoIcon = ({ className = "w-8 h-8", style }: { className?: string; style?: React.CSSProperties }) => (
     <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} style={style}>
@@ -196,6 +265,7 @@ const parseXlsxFile = (file: File) => new Promise<string[][]>((resolve, reject) 
 // --- RICH CONTENT COMPONENTS ---
 
 const InteractiveTable: React.FC<TableContent> = ({ title, data }) => {
+    const { t } = useLanguage();
     const handleDownload = () => {
         const worksheet = XLSX.utils.aoa_to_sheet(data);
         const workbook = XLSX.utils.book_new();
@@ -203,14 +273,14 @@ const InteractiveTable: React.FC<TableContent> = ({ title, data }) => {
         XLSX.writeFile(workbook, `${title || 'table'}.xlsx`);
     };
 
-    if (!data || data.length === 0) return <p>لا توجد بيانات لعرضها.</p>;
+    if (!data || data.length === 0) return <p>{t('no_data_to_display')}</p>;
 
     return (
         <div className="bg-gray-900/50 p-4 rounded-lg my-2 border border-purple-500/30">
             <div className="flex justify-between items-center mb-4">
                 <h4 className="font-bold">{title}</h4>
                 <button onClick={handleDownload} className="btn-secondary !text-xs !py-1 !px-3 !rounded-md flex items-center gap-2">
-                    <DownloadIcon /> تنزيل Excel
+                    <DownloadIcon /> {t('download_excel')}
                 </button>
             </div>
             <div className="overflow-x-auto table-container max-h-96">
@@ -274,6 +344,7 @@ const CanvasView: React.FC<{
     onUpdate: (newTitle: string, newData: { section: string; content: string }[]) => void;
 }> = ({ title, data, onUpdate }) => {
     const canvasRef = useRef<HTMLDivElement>(null);
+    const { t } = useLanguage();
     
     const handleBlur = () => {
         if (!canvasRef.current) return;
@@ -324,10 +395,10 @@ const CanvasView: React.FC<{
     return (
         <div className="bg-gray-800/50 p-0.5 rounded-lg my-2 border border-purple-500/30">
              <div className="flex justify-between items-center p-2 bg-gray-950/50 rounded-t-lg">
-                <span className="text-xs text-purple-300 font-mono">مستند تفاعلي</span>
+                <span className="text-xs text-purple-300 font-mono">{t('interactive_document')}</span>
                 <div className="flex items-center gap-2">
                     <button onClick={handleExport} className="text-gray-400 hover:text-white transition-colors text-xs p-1 rounded flex items-center gap-1">
-                        <DownloadIcon /> تصدير PDF
+                        <DownloadIcon /> {t('export_pdf')}
                     </button>
                 </div>
             </div>
@@ -365,6 +436,7 @@ const NewsReportView: React.FC<NewsReportContent> = ({ title, summary, articles 
 const CodeProjectView: React.FC<{ project: CodeProjectContent, onPreviewCode: (code: string, language: string) => void }> = ({ project, onPreviewCode }) => {
     const [activeTab, setActiveTab] = useState(0);
     const { title, files, review } = project;
+    const { t } = useLanguage();
 
     const reviewIcons = {
         overview: 'fas fa-binoculars',
@@ -401,26 +473,26 @@ const CodeProjectView: React.FC<{ project: CodeProjectContent, onPreviewCode: (c
 
             {/* Review Section */}
             <div className="mt-6">
-                <h4 className="text-lg font-bold mb-3 text-purple-300">مراجعة المشروع</h4>
+                <h4 className="text-lg font-bold mb-3 text-purple-300">{t('project_review')}</h4>
                 <div className="space-y-4">
                     <div className="review-section">
-                        <h5 className="review-title"><i className={`${reviewIcons.overview} mr-2`}></i> نظرة عامة</h5>
+                        <h5 className="review-title"><i className={`${reviewIcons.overview} mr-2`}></i> {t('overview')}</h5>
                         <p>{review.overview}</p>
                     </div>
                     <div className="review-section">
-                         <h5 className="review-title"><i className={`${reviewIcons.strengths} mr-2 text-green-400`}></i> نقاط القوة</h5>
+                         <h5 className="review-title"><i className={`${reviewIcons.strengths} mr-2 text-green-400`}></i> {t('strengths')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
                             {review.strengths.map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                     </div>
                     <div className="review-section">
-                         <h5 className="review-title"><i className={`${reviewIcons.improvements} mr-2 text-yellow-400`}></i> اقتراحات للتحسين</h5>
+                         <h5 className="review-title"><i className={`${reviewIcons.improvements} mr-2 text-yellow-400`}></i> {t('improvement_suggestions')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
                             {review.improvements.map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                     </div>
                      <div className="review-section">
-                         <h5 className="review-title"><i className={`${reviewIcons.nextSteps} mr-2 text-blue-400`}></i> الخطوات التالية</h5>
+                         <h5 className="review-title"><i className={`${reviewIcons.nextSteps} mr-2 text-blue-400`}></i> {t('next_steps')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
                             {review.nextSteps.map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
@@ -434,6 +506,7 @@ const CodeProjectView: React.FC<{ project: CodeProjectContent, onPreviewCode: (c
 const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
     const resumeRef = useRef<HTMLDivElement>(null);
     const { name, title, contact, summary, experience, education, skills, projects } = resume;
+    const { t } = useLanguage();
 
     const handleExport = () => {
         if (resumeRef.current) {
@@ -473,9 +546,9 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
     return (
         <div className="bg-gray-800/50 p-0.5 rounded-lg my-2 border border-purple-500/30">
             <div className="flex justify-between items-center p-2 bg-gray-950/50 rounded-t-lg">
-                <span className="text-xs text-purple-300 font-mono">سيرة ذاتية (ATS-Friendly)</span>
+                <span className="text-xs text-purple-300 font-mono">{t('resume_ats')}</span>
                 <button onClick={handleExport} className="text-gray-400 hover:text-white transition-colors text-xs p-1 rounded flex items-center gap-1">
-                    <DownloadIcon /> تصدير PDF
+                    <DownloadIcon /> {t('export_pdf')}
                 </button>
             </div>
             <div ref={resumeRef} className="resume-view">
@@ -493,11 +566,11 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
                 <main className="resume-body">
                     <section className="resume-main-content">
                         <div className="resume-section">
-                            <h3><i className="fas fa-user-tie"></i> ملخص احترافي</h3>
+                            <h3><i className="fas fa-user-tie"></i> {t('professional_summary')}</h3>
                             <p>{summary}</p>
                         </div>
                         <div className="resume-section">
-                            <h3><i className="fas fa-briefcase"></i> الخبرة العملية</h3>
+                            <h3><i className="fas fa-briefcase"></i> {t('work_experience')}</h3>
                             {experience.map((exp, i) => (
                                 <div key={i} className="resume-item">
                                     <h4>{exp.title}</h4>
@@ -509,7 +582,7 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
                         </div>
                          {projects && projects.length > 0 && (
                             <div className="resume-section">
-                                <h3><i className="fas fa-tasks"></i> المشاريع</h3>
+                                <h3><i className="fas fa-tasks"></i> {t('projects')}</h3>
                                 {projects.map((proj, i) => (
                                     <div key={i} className="resume-item">
                                         <h4>{proj.name}</h4>
@@ -522,7 +595,7 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
                     </section>
                     <aside className="resume-sidebar">
                         <div className="resume-section">
-                            <h3><i className="fas fa-graduation-cap"></i> التعليم</h3>
+                            <h3><i className="fas fa-graduation-cap"></i> {t('education')}</h3>
                              {education.map((edu, i) => (
                                 <div key={i} className="resume-item">
                                     <h4>{edu.degree}</h4>
@@ -533,7 +606,7 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
                             ))}
                         </div>
                         <div className="resume-section">
-                            <h3><i className="fas fa-cogs"></i> المهارات</h3>
+                            <h3><i className="fas fa-cogs"></i> {t('skills')}</h3>
                              {skills.map((skillCat, i) => (
                                 <div key={i} className="mb-2">
                                     <h4>{skillCat.category}</h4>
@@ -617,20 +690,21 @@ const StudyExplanationView: React.FC<{
     onFollowUp: (type: 'review' | 'quiz', topic: string) => void;
     onPreviewCode: (code: string, language: string) => void;
 }> = ({ data, onFollowUp, onPreviewCode }) => {
+    const { t } = useLanguage();
     return (
         <div className="study-session-view">
-            <h2 className="study-topic-title"><i className="fas fa-graduation-cap mr-3"></i> جلسة مذاكرة: {data.topic}</h2>
+            <h2 className="study-topic-title"><i className="fas fa-graduation-cap mr-3"></i> {t('study_session_topic', data.topic)}</h2>
             <div className="study-section">
-                <h3 className="study-section-title">الشرح</h3>
+                <h3 className="study-section-title">{t('explanation')}</h3>
                 <div className="explanation-block">
                     <RichMarkdownRenderer markdown={data.explanation} onPreviewCode={onPreviewCode} />
                 </div>
             </div>
             <div className="mt-6 p-4 bg-purple-900/50 rounded-lg flex flex-col md:flex-row items-center justify-center gap-4">
-                <p className="font-bold">هل أنت مستعد للخطوة التالية؟</p>
+                <p className="font-bold">{t('ready_for_next_step')}</p>
                 <div className="flex gap-4">
-                    <button onClick={() => onFollowUp('review', data.topic)} className="btn-secondary">إنشاء مراجعة</button>
-                    <button onClick={() => onFollowUp('quiz', data.topic)} className="btn-primary">إنشاء اختبار</button>
+                    <button onClick={() => onFollowUp('review', data.topic)} className="btn-secondary">{t('create_review')}</button>
+                    <button onClick={() => onFollowUp('quiz', data.topic)} className="btn-primary">{t('create_quiz')}</button>
                 </div>
             </div>
         </div>
@@ -638,10 +712,11 @@ const StudyExplanationView: React.FC<{
 };
 
 const StudyReviewView: React.FC<{ data: StudyReviewContent }> = ({ data }) => {
+    const { t } = useLanguage();
     return (
         <div className="study-session-view mt-4">
              <div className="study-section">
-                <h3 className="study-section-title">المراجعة</h3>
+                <h3 className="study-section-title">{t('review')}</h3>
                 <div className="review-block">
                     <h4>{data.review.title}</h4>
                     <ul className="list-disc pl-5 space-y-1">
@@ -655,6 +730,7 @@ const StudyReviewView: React.FC<{ data: StudyReviewContent }> = ({ data }) => {
 
 const StudyQuizView: React.FC<{ data: StudyQuizContent }> = ({ data }) => {
     const { quiz } = data;
+    const { t } = useLanguage();
     const [userAnswers, setUserAnswers] = useState<Record<number, string | number>>({});
     const [submitted, setSubmitted] = useState(false);
     const [score, setScore] = useState(0);
@@ -699,7 +775,7 @@ const StudyQuizView: React.FC<{ data: StudyQuizContent }> = ({ data }) => {
     return (
         <div className="study-session-view mt-4">
              <div className="study-section">
-                <h3 className="study-section-title">اختبار قصير: {data.topic}</h3>
+                <h3 className="study-section-title">{t('quiz_topic', data.topic)}</h3>
                 <div className="quiz-block">
                     {quiz.map((q, i) => (
                         <div key={i} className="quiz-question">
@@ -717,18 +793,18 @@ const StudyQuizView: React.FC<{ data: StudyQuizContent }> = ({ data }) => {
                             {q.type === 'short_answer' && (
                                 <div className="mt-2">
                                      <input type="text" onChange={(e) => handleAnswerChange(i, e.target.value)} className={`w-full p-2 rounded bg-gray-900/80 border border-purple-500/30 focus:ring-purple-500 focus:border-purple-500 ${ submitted ? ((userAnswers[i] as string || '').trim().toLowerCase() === (q.correctAnswer as string).toLowerCase() ? 'bg-green-900/50 border-green-500' : 'bg-red-900/50 border-red-500') : '' }`} disabled={submitted} />
-                                    {submitted && ((userAnswers[i] as string || '').trim().toLowerCase() !== (q.correctAnswer as string).toLowerCase()) && <p className="text-xs text-green-400 mt-1">الإجابة الصحيحة: {q.correctAnswer}</p>}
+                                    {submitted && ((userAnswers[i] as string || '').trim().toLowerCase() !== (q.correctAnswer as string).toLowerCase()) && <p className="text-xs text-green-400 mt-1">{t('correct_answer')}: {q.correctAnswer}</p>}
                                 </div>
                             )}
                         </div>
                     ))}
                     {!submitted ? (
-                        <button onClick={handleSubmit} className="btn-primary mt-6 w-full">عرض النتيجة</button>
+                        <button onClick={handleSubmit} className="btn-primary mt-6 w-full">{t('show_result')}</button>
                     ) : (
                         <div className="mt-6 p-4 bg-purple-900/50 rounded-lg text-center">
-                            <h4 className="text-xl font-bold">نتيجتك</h4>
+                            <h4 className="text-xl font-bold">{t('your_result')}</h4>
                             <p className="text-3xl font-bold my-2">{score} / {quiz.length}</p>
-                            <button onClick={() => { setSubmitted(false); setUserAnswers({})}} className="btn-secondary !text-sm mt-2">أعد الاختبار</button>
+                            <button onClick={() => { setSubmitted(false); setUserAnswers({})}} className="btn-secondary !text-sm mt-2">{t('retake_quiz')}</button>
                         </div>
                     )}
                 </div>
@@ -742,6 +818,7 @@ const StudyQuizView: React.FC<{ data: StudyQuizContent }> = ({ data }) => {
 
 const CodeBlock: React.FC<{ code: string; language: string; onPreview: (code: string, language: string) => void; }> = ({ code, language, onPreview }) => {
     const [copied, setCopied] = useState(false);
+    const { t } = useLanguage();
 
     const handleCopy = () => {
         navigator.clipboard.writeText(code);
@@ -762,7 +839,7 @@ const CodeBlock: React.FC<{ code: string; language: string; onPreview: (code: st
                         </button>
                     )}
                     <button onClick={handleCopy} className="text-gray-400 hover:text-white transition-colors text-xs p-1 rounded z-10 flex items-center gap-1">
-                        {copied ? <><i className="fas fa-check"></i> Copied</> : <><i className="fas fa-copy"></i> Copy</>}
+                        {copied ? <><i className="fas fa-check"></i> {t('copied')}</> : <><i className="fas fa-copy"></i> Copy</>}
                     </button>
                 </div>
             </div>
@@ -785,6 +862,7 @@ const MessageBubble: React.FC<{
     const bgClass = isUser
         ? 'bg-gradient-to-r from-[#8a2be2] to-[#00bfff] text-white rounded-br-lg'
         : 'bg-[rgba(30,30,60,0.8)] border border-[rgba(138,43,226,0.3)] rounded-bl-lg';
+    const { t } = useLanguage();
 
     const renderContent = () => {
         const { content } = message;
@@ -835,24 +913,33 @@ const MessageBubble: React.FC<{
                 case 'study_explanation': return <StudyExplanationView data={richContent} onFollowUp={onStudyFollowUp} onPreviewCode={onPreviewCode} />;
                 case 'study_review': return <StudyReviewView data={richContent} />;
                 case 'study_quiz': return <StudyQuizView data={richContent} />;
-                default: return <p>محتوى غير مدعوم.</p>;
+                default: return <p>{t('unsupported_content')}</p>;
             }
         }
         
         return null; // Fallback
     };
+    
+    const handleDownload = (url: string, index: number) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `nova-ai-${message.id}-${index}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div className={`group relative max-w-[95%] p-4 rounded-2xl leading-relaxed animate-fade-in ${alignClass} ${bgClass}`}>
              {message.role === 'model' && (
-                <button onClick={() => onSaveMemory(message)} title="حفظ في الذاكرة" className="absolute -top-2 -right-2 bg-yellow-500 text-white w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 z-10">
+                <button onClick={() => onSaveMemory(message)} title={t('save_to_memory')} className="absolute -top-2 -right-2 bg-yellow-500 text-white w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 z-10">
                     <BookmarkIcon />
                 </button>
             )}
             {message.filePreview && (
                 <div className="mb-2 p-2 bg-black/20 rounded-lg text-sm flex items-center gap-2">
                     {message.filePreview.type.includes('pdf') ? <FilePdfIcon /> : message.filePreview.type.includes('sheet') ? <FileExcelIcon /> : <FileTextIcon />}
-                    <span>ملف مرفق للتحليل: {message.filePreview.name}</span>
+                    <span>{t('attached_file_for_analysis', message.filePreview.name)}</span>
                 </div>
             )}
             {isUser && message.images && message.images.map((img, index) => (
@@ -861,12 +948,26 @@ const MessageBubble: React.FC<{
             
             {renderContent()}
 
-            {message.role === 'model' && !isUser && message.images && message.images.map((img, index) => (
-                <img key={`model-img-${index}`} src={img} alt="Generated image" className="mt-4 rounded-lg max-w-full h-auto"/>
-            ))}
+            {message.role === 'model' && message.images && (
+                 <div className={`mt-4 grid grid-cols-1 ${message.images.length > 1 ? 'sm:grid-cols-2' : ''} gap-2`}>
+                    {message.images.map((img, index) => (
+                        <div key={`model-img-${index}`} className="relative group/img">
+                            <img src={img} alt="Generated image" className="rounded-lg w-full h-auto"/>
+                            <button 
+                                onClick={() => handleDownload(img, index)}
+                                className="absolute top-2 right-2 bg-black/50 text-white w-8 h-8 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center"
+                                title={t('download_image')}
+                            >
+                                <DownloadIcon />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {message.sources && message.sources.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-white/20">
-                    <h4 className="text-sm font-bold mb-2">المصادر:</h4>
+                    <h4 className="text-sm font-bold mb-2">{t('sources')}:</h4>
                     <ul className="list-none p-0 text-xs space-y-2">
                         {message.sources.map((source, i) => (
                             <li key={i}><a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">{i + 1}. {source.title}</a></li>
@@ -893,6 +994,7 @@ const MainSidebar: React.FC<{
     isDrawerOpen: boolean;
     onCloseDrawer: () => void;
 }> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, currentView, onSetView, onLogout, isDrawerOpen, onCloseDrawer }) => {
+    const { t } = useLanguage();
     const sortedSessions = Object.values(sessions).sort((a, b) => {
         const timeA = a.messages[a.messages.length - 1]?.id || '0';
         const timeB = b.messages[b.messages.length - 1]?.id || '0';
@@ -900,10 +1002,10 @@ const MainSidebar: React.FC<{
     });
 
     const mainNavItems = [
-        { id: View.IMAGE_STUDIO, icon: <ImageIcon />, label: 'استوديو الصور' },
-        { id: View.CREATE_TOOL, icon: <ToolIcon />, label: 'إدارة الأدوات' },
-        { id: View.PROFILE, icon: <ProfileIcon />, label: 'الملف الشخصي' },
-        { id: View.SETTINGS, icon: <SettingsIcon />, label: 'الإعدادات' },
+        { id: View.IMAGE_STUDIO, icon: <ImageIcon />, label: t('image_studio') },
+        { id: View.CREATE_TOOL, icon: <ToolIcon />, label: t('manage_tools') },
+        { id: View.PROFILE, icon: <ProfileIcon />, label: t('profile') },
+        { id: View.SETTINGS, icon: <SettingsIcon />, label: t('settings') },
     ];
     
     const handleAction = (action: () => void) => {
@@ -949,19 +1051,19 @@ const MainSidebar: React.FC<{
                 </div>
                 {(!isCollapsed || isMobile) && (
                     <div className="flex items-center">
-                         <button onClick={handleNewTempChatClick} className="p-2 rounded-md hover:bg-purple-500/20" title="محادثة مؤقتة"><GhostIcon/></button>
-                         <button onClick={handleNewChatClick} className="p-2 rounded-md hover:bg-purple-500/20" title="محادثة جديدة"><EditIcon/></button>
+                         <button onClick={handleNewTempChatClick} className="p-2 rounded-md hover:bg-purple-500/20" title={t('temp_chat')}><GhostIcon/></button>
+                         <button onClick={handleNewChatClick} className="p-2 rounded-md hover:bg-purple-500/20" title={t('new_chat')}><EditIcon/></button>
                     </div>
                 )}
             </div>
             
             <div className="flex-1 overflow-y-auto pr-1 space-y-4">
                  <div>
-                    <h3 className={`text-xs font-bold text-gray-400 uppercase pb-1 transition-all ${isCollapsed && !isMobile ? 'text-center' : 'px-3'}`}>الأدوات</h3>
+                    <h3 className={`text-xs font-bold text-gray-400 uppercase pb-1 transition-all ${isCollapsed && !isMobile ? 'text-center' : 'px-3'}`}>{t('tools')}</h3>
                     <ul className="space-y-1">
                         {tools.map(tool => (
                              <li key={tool.id} title={tool.name}>
-                                <a href="#" onClick={e => {e.preventDefault(); handleToolClick(tool)}} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-purple-500/10 ${isCollapsed && !isMobile ? 'justify-center' : ''}`}>
+                                <a href="#" onClick={e => {e.preventDefault(); handleToolClick(tool)}} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-purple-500/10 ${isCollapsed && !isMobile ? 'justify-start' : 'justify-center'}`}>
                                     <span className="text-xl">{tool.icon}</span>
                                     {(!isCollapsed || isMobile) && <span className="font-semibold text-sm truncate">{tool.name}</span>}
                                 </a>
@@ -970,7 +1072,7 @@ const MainSidebar: React.FC<{
                     </ul>
                 </div>
                 <div>
-                    <h3 className={`text-xs font-bold text-gray-400 uppercase pb-1 transition-all ${isCollapsed && !isMobile ? 'text-center' : 'px-3 pt-2'}`}>الأخيرة</h3>
+                    <h3 className={`text-xs font-bold text-gray-400 uppercase pb-1 transition-all ${isCollapsed && !isMobile ? 'text-center' : 'px-3 pt-2'}`}>{t('recent')}</h3>
                     <ul className="space-y-1">
                         {sortedSessions.map(session => (
                             <li key={session.id} className="group" title={session.title}>
@@ -993,16 +1095,16 @@ const MainSidebar: React.FC<{
                      <button
                         key={item.id}
                         onClick={() => handleViewClick(item.id)}
-                        className={`flex items-center gap-4 w-full p-3 rounded-lg text-sm transition-colors ${currentView === item.id ? 'bg-purple-500/30 text-white' : 'text-gray-400 hover:bg-purple-500/10 hover:text-white'} ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
+                        className={`flex items-center gap-4 w-full p-3 rounded-lg text-sm transition-colors ${currentView === item.id ? 'bg-purple-500/30 text-white' : 'text-gray-400 hover:bg-purple-500/10 hover:text-white'} ${isCollapsed && !isMobile ? 'justify-start' : 'justify-center'}`}
                         title={item.label}
                     >
                         <span className="w-6 text-center text-lg">{item.icon}</span>
                         {(!isCollapsed || isMobile) && <span>{item.label}</span>}
                     </button>
                  ))}
-                <button onClick={handleLogoutClick} className={`flex items-center gap-4 w-full p-3 rounded-lg text-sm transition-colors text-gray-400 hover:bg-red-500/10 hover:text-white ${isCollapsed && !isMobile ? 'justify-center' : ''}`} title="تسجيل الخروج">
+                <button onClick={handleLogoutClick} className={`flex items-center gap-4 w-full p-3 rounded-lg text-sm transition-colors text-gray-400 hover:bg-red-500/10 hover:text-white ${isCollapsed && !isMobile ? 'justify-start' : 'justify-center'}`} title={t('logout')}>
                     <span className="w-6 text-center text-lg"><i className="fas fa-sign-out-alt"></i></span>
-                    {(!isCollapsed || isMobile) && <span>الخروج</span>}
+                    {(!isCollapsed || isMobile) && <span>{t('logout')}</span>}
                 </button>
             </div>
          </>
@@ -1022,68 +1124,211 @@ const MainSidebar: React.FC<{
     );
 };
 
-const ImageStudioView: React.FC = () => {
+const ImageHistoryCard: React.FC<{
+    item: ImageHistoryItem;
+    onDownload: (url: string, filename: string) => void;
+    onCopy: (text: string) => void;
+}> = ({ item, onDownload, onCopy }) => {
+    const { t } = useLanguage();
+    return (
+        <div className="aspect-square bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20 group relative overflow-hidden animate-fade-in">
+            <img src={item.urls[0]} alt={item.prompt} className="w-full h-full object-cover rounded-md" />
+            <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 text-white">
+                <p className="text-xs font-mono line-clamp-4">{item.enhancedPrompt}</p>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => onDownload(item.urls[0], `nova-ai-${item.id}.png`)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('download')}>
+                        <DownloadIcon />
+                    </button>
+                    <button onClick={() => onCopy(item.enhancedPrompt)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('copy_prompt')}>
+                        <i className="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+const ImageStudioView: React.FC<{
+    imageHistory: ImageHistoryItem[],
+    onImagesGenerated: (items: ImageHistoryItem) => void
+}> = ({ imageHistory, onImagesGenerated }) => {
+    const { t } = useLanguage();
     const [prompt, setPrompt] = useState('');
+    const [model, setModel] = useState<'gemini' | 'pollinations'>('gemini');
+    const [style, setStyle] = useState('photorealistic');
+    const [numImages, setNumImages] = useState(1);
     const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
     const [isLoading, setIsLoading] = useState(false);
-    const [images, setImages] = useState<string[]>([]);
+    const [loadingMessage, setLoadingMessage] = useState('');
+    const [currentImages, setCurrentImages] = useState<string[]>([]);
     const [error, setError] = useState('');
+    
+    const sortedHistory = [...imageHistory].sort((a,b) => b.timestamp - a.timestamp);
+
+    const imageStyles = [
+        { value: 'photorealistic', label: t('style_photorealistic') },
+        { value: 'cinematic', label: t('style_cinematic') },
+        { value: 'fantasy', label: t('style_fantasy') },
+        { value: 'anime', label: t('style_anime') },
+        { value: 'digital_art', label: t('style_digital_art') },
+        { value: '3d_model', label: t('style_3d_model') },
+    ];
 
     const handleGenerate = async () => {
         if (!prompt) {
-            setError('الرجاء إدخال وصف للصورة.');
+            setError(t('error_prompt_required'));
             return;
         }
         setIsLoading(true);
         setError('');
-        setImages([]);
+        setCurrentImages([]);
+        setLoadingMessage(t('loading_enhancing_prompt'));
+
+        let finalPrompt = '';
         try {
-            const generated = await generateImageService(prompt, aspectRatio, 1);
-            setImages(generated);
+            finalPrompt = await enhancePromptForImage(prompt, style);
+            setLoadingMessage(t('loading_generating_images'));
+        } catch (e) {
+            console.error("Prompt enhancement failed:", e);
+            setError(t('error_prompt_enhancement_failed'));
+            finalPrompt = prompt; // Fallback to original prompt
+        }
+        
+        let generatedUrls: string[] = [];
+
+        try {
+            if (model === 'gemini') {
+                generatedUrls = await generateImageService(finalPrompt, aspectRatio, numImages);
+            } else { // Pollinations model
+                const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
+                // We need to fetch and convert to base64 to store it like Gemini images for consistency
+                 const response = await fetch(imageUrl);
+                 if (!response.ok) throw new Error("Network response was not ok from Pollinations.");
+                 const blob = await response.blob();
+                 generatedUrls = [await new Promise((resolve, reject) => {
+                     const reader = new FileReader();
+                     reader.onloadend = () => resolve(reader.result as string);
+                     reader.onerror = reject;
+                     reader.readAsDataURL(blob);
+                 })];
+            }
+            
+            setCurrentImages(generatedUrls);
+            const newHistoryItem: ImageHistoryItem = {
+                id: Date.now().toString(),
+                urls: generatedUrls,
+                prompt: prompt,
+                enhancedPrompt: finalPrompt,
+                model: model,
+                style: style,
+                aspectRatio: aspectRatio,
+                timestamp: Date.now(),
+            };
+            onImagesGenerated(newHistoryItem);
+
         } catch (e) {
             console.error(e);
-            setError('حدث خطأ أثناء توليد الصورة. يرجى المحاولة مرة أخرى.');
+            const modelName = model === 'gemini' ? 'Gemini' : 'Nova gen 1';
+            setError(t('error_image_generation_failed', modelName));
         } finally {
             setIsLoading(false);
+            setLoadingMessage('');
         }
+    };
+    
+    const handleDownload = (url: string, filename: string) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+    
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text);
     };
 
     return (
-        <div className="w-full">
-            <div className="bg-[#0a0a1a] p-6 rounded-xl border border-purple-500/20 space-y-4">
-                <textarea
-                    value={prompt}
-                    onChange={e => setPrompt(e.target.value)}
-                    placeholder="مثال: أسد مهيب في غابة نابضة بالحياة، واقعي للغاية..."
-                    className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]"
-                    disabled={isLoading}
-                />
-                <div className="flex flex-col md:flex-row gap-4">
-                    <select
-                        value={aspectRatio}
-                        onChange={e => setAspectRatio(e.target.value as any)}
-                        className="flex-1 p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]"
-                        disabled={isLoading}
-                    >
-                        <option value="1:1">مربع (1:1)</option>
-                        <option value="16:9">عريض (16:9)</option>
-                        <option value="9:16">طولي (9:16)</option>
-                        <option value="4:3">منظر طبيعي (4:3)</option>
-                        <option value="3:4">بورتريه (3:4)</option>
-                    </select>
-                    <button onClick={handleGenerate} className="btn-primary flex-1 flex items-center justify-center gap-2" disabled={isLoading}>
-                        {isLoading ? 'جاري التوليد...' : <> <ImageIcon /> توليد الصور</>}
-                    </button>
-                </div>
-            </div>
-            {error && <p className="text-red-400 mt-4 text-center">{error}</p>}
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {isLoading && <div className="flex items-center justify-center col-span-full"><div className="w-16 h-16 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>}
-                {images.map((img, index) => (
-                    <div key={index} className="bg-[#0a0a1a] p-2 rounded-lg border border-purple-500/20">
-                        <img src={img} alt={`Generated image ${index + 1}`} className="rounded-md w-full h-auto" />
+        <div className="flex flex-col md:flex-row h-full w-full overflow-hidden">
+            {/* Controls Panel */}
+            <div className="w-full md:w-96 p-4 md:p-6 bg-[rgba(10,10,26,0.8)] border-l border-purple-500/20 shrink-0 overflow-y-auto">
+                <h1 className="text-2xl font-bold mb-6">{t('image_studio')}</h1>
+                 <div className="bg-[#0a0a1a] p-4 rounded-xl border border-purple-500/20 space-y-4">
+                     <div className="flex justify-center gap-2 p-1 bg-[rgba(30,30,60,0.8)] rounded-full">
+                        <button onClick={() => setModel('gemini')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${model === 'gemini' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Gemini (Imagen 3)</button>
+                        <button onClick={() => setModel('pollinations')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${model === 'pollinations' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Nova gen 1</button>
                     </div>
-                ))}
+                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={t('image_prompt_placeholder')} className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isLoading}/>
+                    <div className="grid grid-cols-1 gap-4">
+                        <div>
+                            <label className="block text-sm font-bold mb-2 text-gray-400">{t('style')}</label>
+                            <select value={style} onChange={e => setStyle(e.target.value)} className="w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isLoading}>
+                                {imageStyles.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                            </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-bold mb-2 text-gray-400">{t('aspect_ratio')}</label>
+                                <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value as any)} className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${model !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isLoading || model !== 'gemini'}>
+                                    <option value="1:1">1:1</option>
+                                    <option value="16:9">16:9</option>
+                                    <option value="9:16">9:16</option>
+                                    <option value="4:3">4:3</option>
+                                    <option value="3:4">3:4</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-2 text-gray-400">{t('number_of_images')}</label>
+                                <input type="number" value={numImages} onChange={e => setNumImages(Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))} min="1" max="4" className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${model !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isLoading || model !== 'gemini'} />
+                            </div>
+                        </div>
+                    </div>
+                    <button onClick={handleGenerate} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base" disabled={isLoading}>
+                        {isLoading ? loadingMessage : <> <ImageIcon /> {t('generate_images')}</>}
+                    </button>
+                    {model === 'pollinations' && <p className="text-xs text-center text-gray-400">{t('pollinations_disclaimer')}</p>}
+                </div>
+                 {error && <p className="text-red-400 mt-4 text-center">{error}</p>}
+            </div>
+
+            {/* Gallery */}
+            <div className="flex-1 p-4 md:p-6 overflow-y-auto">
+                <h2 className="text-xl font-bold mb-4">{t('current_results')}</h2>
+                 {isLoading && !currentImages.length && (
+                    <div className="flex items-center justify-center h-48"><div className="w-16 h-16 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>
+                 )}
+                 {currentImages.length > 0 && (
+                     <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8`}>
+                        {currentImages.map((img, index) => (
+                            <div key={`current-${index}`} className="relative group/img bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20">
+                                <img src={img} alt={`${t('generated_image')} ${index + 1}`} className="rounded-md w-full h-auto" />
+                                 <button onClick={() => handleDownload(img, `nova-ai-${Date.now()}-${index}.png`)} className="absolute top-2 right-2 bg-black/50 text-white w-8 h-8 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center" title={t('download_image')}>
+                                    <DownloadIcon />
+                                 </button>
+                            </div>
+                        ))}
+                    </div>
+                 )}
+                
+                <h2 className="text-xl font-bold mb-4 border-t border-purple-500/20 pt-6">{t('history')}</h2>
+                {sortedHistory.length === 0 ? (
+                    <p className="text-gray-500 text-center mt-8">{t('no_images_generated')}</p>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                        {sortedHistory.flatMap(item =>
+                             item.urls.map((url, index) => (
+                                 <ImageHistoryCard
+                                     key={`${item.id}-${index}`}
+                                     item={{...item, urls: [url]}} // Pass single url to card
+                                     onDownload={handleDownload}
+                                     onCopy={handleCopy}
+                                 />
+                             ))
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -1095,6 +1340,7 @@ const SettingsView: React.FC<{
     generalMemories: string[],
     onUpdateGeneralMemories: (memories: string[]) => void
 }> = ({ settings, onUpdate, generalMemories, onUpdateGeneralMemories }) => {
+    const { t, language, setLanguage } = useLanguage();
     const [newMemory, setNewMemory] = useState('');
     
     const handleAddMemory = () => {
@@ -1110,43 +1356,50 @@ const SettingsView: React.FC<{
 
     return (
         <div className="space-y-8">
-            <div className="setting-card">
-                <h2 className="setting-title">نبرة الذكاء الاصطناعي</h2>
+             <div className="setting-card">
+                <h2 className="setting-title">{t('language')}</h2>
                 <div className="flex gap-2">
-                    <button className={`setting-btn ${settings.aiTone === 'friendly' && 'active'}`} onClick={() => onUpdate({ ...settings, aiTone: 'friendly' })}>ودود</button>
-                    <button className={`setting-btn ${settings.aiTone === 'formal' && 'active'}`} onClick={() => onUpdate({ ...settings, aiTone: 'formal' })}>رسمي</button>
-                    <button className={`setting-btn ${settings.aiTone === 'creative' && 'active'}`} onClick={() => onUpdate({ ...settings, aiTone: 'creative' })}>إبداعي</button>
+                    <button className={`setting-btn ${language === 'ar' && 'active'}`} onClick={() => setLanguage('ar')}>العربية</button>
+                    <button className={`setting-btn ${language === 'en' && 'active'}`} onClick={() => setLanguage('en')}>English</button>
                 </div>
             </div>
             <div className="setting-card">
-                <h2 className="setting-title">الميزات الافتراضية للمحادثات الجديدة</h2>
+                <h2 className="setting-title">{t('ai_tone')}</h2>
+                <div className="flex gap-2">
+                    <button className={`setting-btn ${settings.aiTone === 'friendly' && 'active'}`} onClick={() => onUpdate({ ...settings, aiTone: 'friendly' })}>{t('tone_friendly')}</button>
+                    <button className={`setting-btn ${settings.aiTone === 'formal' && 'active'}`} onClick={() => onUpdate({ ...settings, aiTone: 'formal' })}>{t('tone_formal')}</button>
+                    <button className={`setting-btn ${settings.aiTone === 'creative' && 'active'}`} onClick={() => onUpdate({ ...settings, aiTone: 'creative' })}>{t('tone_creative')}</button>
+                </div>
+            </div>
+            <div className="setting-card">
+                <h2 className="setting-title">{t('default_features_new_chats')}</h2>
                 <div className="space-y-4">
                     <label className="flex items-center justify-between cursor-pointer">
-                        <span>تفعيل البحث في الإنترنت</span>
+                        <span>{t('enable_internet_search')}</span>
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultInternetSearch} onChange={e => onUpdate({ ...settings, defaultInternetSearch: e.target.checked })} />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
-                        <span>تفعيل التفكير العميق</span>
+                        <span>{t('enable_deep_thinking')}</span>
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultDeepThinking} onChange={e => onUpdate({ ...settings, defaultDeepThinking: e.target.checked })} />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
-                        <span>تفعيل وضع البحث العلمي</span>
+                        <span>{t('enable_scientific_mode')}</span>
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultScientificMode} onChange={e => onUpdate({ ...settings, defaultScientificMode: e.target.checked })} />
                     </label>
                 </div>
             </div>
             <div className="setting-card">
-                <h2 className="setting-title">الذكريات العامة</h2>
-                <p className="text-sm text-gray-400 mb-4">أضف ملاحظات أو حقائق تريد من Nova أن يتذكرها دائمًا في جميع المحادثات.</p>
+                <h2 className="setting-title">{t('general_memories')}</h2>
+                <p className="text-sm text-gray-400 mb-4">{t('general_memories_desc')}</p>
                 <div className="flex gap-2">
                     <input 
                         type="text" 
                         value={newMemory} 
                         onChange={e => setNewMemory(e.target.value)} 
-                        placeholder="مثال: اسمي هو..." 
+                        placeholder={t('general_memories_placeholder')}
                         className="modal-input"
                     />
-                    <button onClick={handleAddMemory} className="btn-primary !px-6 !rounded-lg">حفظ</button>
+                    <button onClick={handleAddMemory} className="btn-primary !px-6 !rounded-lg">{t('save')}</button>
                 </div>
                  <ul className="mt-4 space-y-2">
                     {generalMemories.map((mem, index) => (
@@ -1165,6 +1418,7 @@ const CreateToolView: React.FC<{
     tools: CustomTool[], 
     onUpdateTools: (tools: CustomTool[]) => void 
 }> = ({ tools, onUpdateTools }) => {
+    const { t } = useLanguage();
     const [editingTool, setEditingTool] = useState<CustomTool | null>(null);
     const [name, setName] = useState('');
     const [icon, setIcon] = useState('🤖');
@@ -1229,23 +1483,23 @@ const CreateToolView: React.FC<{
         <div className="w-full">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="setting-card space-y-4">
-                    <h2 className="setting-title">{editingTool ? 'تعديل الأداة' : 'إنشاء أداة جديدة'}</h2>
+                    <h2 className="setting-title">{editingTool ? t('edit_tool') : t('create_new_tool')}</h2>
                     <div>
-                        <label className="block text-sm font-bold mb-2">اسم الأداة</label>
-                        <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="مثال: خبير تلخيص" className="modal-input" />
+                        <label className="block text-sm font-bold mb-2">{t('tool_name')}</label>
+                        <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('tool_name_placeholder')} className="modal-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold mb-2">الأيقونة (Emoji)</label>
+                        <label className="block text-sm font-bold mb-2">{t('tool_icon')}</label>
                         <input type="text" value={icon} onChange={e => setIcon(e.target.value)} placeholder="🤖" className="modal-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold mb-2">التعليمات (System Prompt)</label>
-                        <textarea value={promptText} onChange={e => setPromptText(e.target.value)} placeholder="أنت خبير في تلخيص رسائل البريد الإلكتروني..." className="w-full p-3 h-32 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]"/>
+                        <label className="block text-sm font-bold mb-2">{t('tool_prompt')}</label>
+                        <textarea value={promptText} onChange={e => setPromptText(e.target.value)} placeholder={t('tool_prompt_placeholder')} className="w-full p-3 h-32 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]"/>
                     </div>
                     <div>
-                        <label className="block text-sm font-bold mb-2">قاعدة المعرفة (ملفات نصية)</label>
+                        <label className="block text-sm font-bold mb-2">{t('tool_knowledge_base')}</label>
                         <input type="file" accept=".txt,.md,.json,.csv" onChange={handleKnowledgeFileChange} ref={knowledgeFileInputRef} className="hidden"/>
-                        <button onClick={() => knowledgeFileInputRef.current?.click()} className="btn-secondary !text-sm w-full">إضافة ملف معرفة</button>
+                        <button onClick={() => knowledgeFileInputRef.current?.click()} className="btn-secondary !text-sm w-full">{t('add_knowledge_file')}</button>
                         <ul className="mt-2 space-y-1">
                             {knowledge.map((k, i) => (
                                 <li key={i} className="flex justify-between items-center bg-purple-500/10 p-1.5 rounded text-xs">
@@ -1256,14 +1510,14 @@ const CreateToolView: React.FC<{
                         </ul>
                     </div>
                     <div className="flex gap-2 pt-4">
-                        <button onClick={handleSaveTool} className="btn-primary w-full">{editingTool ? 'حفظ التغييرات' : 'حفظ الأداة'}</button>
-                        {editingTool && <button onClick={() => setEditingTool(null)} className="btn-secondary w-full">إلغاء</button>}
+                        <button onClick={handleSaveTool} className="btn-primary w-full">{editingTool ? t('save_changes') : t('save_tool')}</button>
+                        {editingTool && <button onClick={() => setEditingTool(null)} className="btn-secondary w-full">{t('cancel')}</button>}
                     </div>
                 </div>
                 <div className="setting-card">
-                    <h2 className="setting-title">الأدوات المحفوظة</h2>
+                    <h2 className="setting-title">{t('saved_tools')}</h2>
                     <ul className="space-y-3 overflow-y-auto max-h-[70vh] pr-2">
-                        {tools.length === 0 && <p className="text-gray-400">لم تقم بإنشاء أي أدوات بعد.</p>}
+                        {tools.length === 0 && <p className="text-gray-400">{t('no_tools_created')}</p>}
                         {tools.map(tool => (
                             <li key={tool.id} className="flex justify-between items-center bg-purple-500/10 p-3 rounded-md">
                                 <div className="flex items-center gap-3">
@@ -1288,34 +1542,35 @@ const ProfileView: React.FC<{
     savedMemories: Message[],
     onDeleteMemory: (id: string) => void,
 }> = ({ userProfile, savedMemories, onDeleteMemory }) => {
+    const { t } = useLanguage();
     return (
          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="setting-card">
-                <h2 className="setting-title">المعلومات المكتسبة</h2>
-                <p className="text-sm text-gray-400 mb-4">هذه هي الأشياء التي تعلمها Nova عنك من خلال محادثاتكم لتحسين التجربة.</p>
+                <h2 className="setting-title">{t('acquired_knowledge')}</h2>
+                <p className="text-sm text-gray-400 mb-4">{t('acquired_knowledge_desc')}</p>
                  {Object.keys(userProfile).length === 0 ? (
-                    <p className="text-gray-500">لم يتعلم Nova أي شيء عنك بعد. ابدأ محادثة!</p>
+                    <p className="text-gray-500">{t('no_acquired_knowledge')}</p>
                  ) : (
                     <ul className="space-y-2">
                         {Object.entries(userProfile).map(([key, value]) => (
                             <li key={key} className="text-sm">
-                                <strong className="capitalize text-purple-300">{key.replace(/_/g, ' ')}:</strong> {Array.isArray(value) ? value.join(', ') : value}
+                                <strong className="capitalize text-purple-300">{t(`user_profile_${key}` as TranslationKey, key.replace(/_/g, ' '))}:</strong> {Array.isArray(value) ? value.join(', ') : value}
                             </li>
                         ))}
                     </ul>
                  )}
             </div>
             <div className="setting-card">
-                <h2 className="setting-title">الذكريات المحفوظة</h2>
-                 <p className="text-sm text-gray-400 mb-4">الرسائل التي قمت بحفظها يدويًا للرجوع إليها لاحقًا.</p>
+                <h2 className="setting-title">{t('saved_memories')}</h2>
+                 <p className="text-sm text-gray-400 mb-4">{t('saved_memories_desc')}</p>
                  <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                      {savedMemories.length === 0 ? (
-                        <p className="text-gray-500">لم تقم بحفظ أي ذكريات. اضغط على أيقونة الحفظ بجانب أي رسالة من Nova.</p>
+                        <p className="text-gray-500">{t('no_saved_memories')}</p>
                      ) : (
                         savedMemories.map(mem => (
                             <div key={mem.id} className="relative group/memory">
                                 <MessageBubble message={mem} onSaveMemory={() => {}} onPreviewCode={() => {}} onUpdateMessageContent={()=>{}} onStudyFollowUp={() => {}}/>
-                                <button onClick={() => onDeleteMemory(mem.id)} title="حذف الذاكرة" className="absolute top-0 left-0 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center hover:scale-110 opacity-0 group-hover/memory:opacity-100 transition-opacity">
+                                <button onClick={() => onDeleteMemory(mem.id)} title={t('delete_memory')} className="absolute top-0 left-0 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center hover:scale-110 opacity-0 group-hover/memory:opacity-100 transition-opacity">
                                     <TrashIcon />
                                 </button>
                             </div>
@@ -1331,19 +1586,20 @@ const SettingsPopover: React.FC<{
     settings: ChatSettings;
     onChange: (newSettings: ChatSettings) => void;
 }> = ({ settings, onChange }) => {
+    const { t } = useLanguage();
     return (
         <div className="absolute top-full left-0 mt-2 w-64 bg-[#1e1e3e] border border-purple-500/50 rounded-lg shadow-lg p-4 z-20">
             <div className="space-y-4">
                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="font-semibold">البحث في الإنترنت</span>
+                    <span className="font-semibold">{t('internet_search')}</span>
                     <input type="checkbox" className="toggle-switch" checked={settings.useInternetSearch} onChange={e => onChange({...settings, useInternetSearch: e.target.checked})}/>
                 </label>
                 <label className="flex items-center justify-between cursor-pointer">
-                    <span className="font-semibold">التفكير العميق</span>
+                    <span className="font-semibold">{t('deep_thinking')}</span>
                      <input type="checkbox" className="toggle-switch" checked={settings.useDeepThinking} onChange={e => onChange({...settings, useDeepThinking: e.target.checked})}/>
                 </label>
                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="font-semibold">وضع البحث العلمي</span>
+                    <span className="font-semibold">{t('scientific_mode')}</span>
                      <input type="checkbox" className="toggle-switch" checked={settings.useScientificMode} onChange={e => onChange({...settings, useScientificMode: e.target.checked})}/>
                 </label>
             </div>
@@ -1355,6 +1611,7 @@ const FilePreviewPanel: React.FC<{
     preview: FilePreviewState;
     onClose: () => void;
 }> = ({ preview, onClose }) => {
+    const { t } = useLanguage();
     if (!preview.isOpen || preview.isCollapsed) return null;
 
     const renderContent = () => {
@@ -1362,7 +1619,7 @@ const FilePreviewPanel: React.FC<{
             return <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>;
         }
         if (preview.type === 'unsupported') {
-            return <p className="text-red-400 p-4">نوع الملف غير مدعوم للمعاينة.</p>
+            return <p className="text-red-400 p-4">{t('unsupported_file_type')}</p>
         }
         if (preview.type === 'image') {
             return <img src={preview.url} alt={preview.name} className="max-w-full h-auto p-2 object-contain" />;
@@ -1412,6 +1669,7 @@ const CodePreviewPanel: React.FC<{
     code: string;
     onClose: () => void;
 }> = ({ isOpen, code, onClose }) => {
+    const { t } = useLanguage();
     const [width, setWidth] = useState(window.innerWidth / 3);
     const panelRef = useRef<HTMLElement>(null);
 
@@ -1458,7 +1716,7 @@ const CodePreviewPanel: React.FC<{
                 </div>
 
                 <div className="p-3 flex justify-between items-center bg-[#1e1e3e] border-b border-purple-500/30 shrink-0">
-                    <h3 className="font-bold">معاينة الكود</h3>
+                    <h3 className="font-bold">{t('code_preview')}</h3>
                     <button onClick={onClose} className="p-1 rounded-md hover:bg-red-500/30"><CloseIcon/></button>
                 </div>
                 <div className="flex-1 bg-white overflow-hidden">
@@ -1473,7 +1731,7 @@ const CodePreviewPanel: React.FC<{
             
             {/* Mobile Modal View */}
             <div className="md:hidden">
-                <Modal title="معاينة الكود" onClose={onClose} size="3xl">
+                <Modal title={t('code_preview')} onClose={onClose} size="3xl">
                      <div className="w-full h-[75vh] bg-white rounded-lg overflow-hidden">
                         <iframe 
                             srcDoc={code} 
@@ -1489,17 +1747,18 @@ const CodePreviewPanel: React.FC<{
 };
 
 const WelcomeScreen: React.FC<{ onPromptSelect: (prompt: string) => void }> = ({ onPromptSelect }) => {
+    const { t } = useLanguage();
     const suggestions = [
-        { title: 'كتابة قصة قصيرة', prompt: 'اكتب لي قصة قصيرة عن مستكشف فضاء يجد كوكبًا غريبًا.'},
-        { title: 'شرح مفهوم معقد', prompt: 'اشرح لي مفهوم الحوسبة الكمومية بطريقة مبسطة.'},
-        { title: 'تخطيط رحلة سفر', prompt: 'خطط لي رحلة سفر لمدة 5 أيام إلى اليابان، مع ذكر الأماكن والأنشطة.'},
-        { title: 'كتابة بريد إلكتروني', prompt: 'اكتب بريدًا إلكترونيًا احترافيًا لطلب زيادة في الراتب.'},
+        { title: t('welcome_suggestion1_title'), prompt: t('welcome_suggestion1_prompt')},
+        { title: t('welcome_suggestion2_title'), prompt: t('welcome_suggestion2_prompt')},
+        { title: t('welcome_suggestion3_title'), prompt: t('welcome_suggestion3_prompt')},
+        { title: t('welcome_suggestion4_title'), prompt: t('welcome_suggestion4_prompt')},
     ];
 
     return (
         <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 text-center">
              <LogoIcon className="w-16 h-16 md:w-20 md:h-20 mb-4"/>
-            <h1 className="text-3xl md:text-5xl font-bold mb-8 md:mb-10 bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">مرحباً في Nova AI</h1>
+            <h1 className="text-3xl md:text-5xl font-bold mb-8 md:mb-10 bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">{t('welcome_to_nova')}</h1>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-3xl">
                 {suggestions.map((s, i) => (
                     <button key={i} onClick={() => onPromptSelect(s.prompt)} className="suggestion-card">
@@ -1525,6 +1784,7 @@ const MainChatInterface: React.FC<{
     onToggleDrawer: () => void;
     onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void;
 }> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer, onStudyFollowUp }) => {
+    const { t } = useLanguage();
     const [showSettings, setShowSettings] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const settingsRef = useRef<HTMLDivElement>(null);
@@ -1575,8 +1835,8 @@ const MainChatInterface: React.FC<{
                 </div>
                 <div className="relative flex items-center gap-2" ref={settingsRef}>
                     <input type="file" ref={knowledgeFileInputRef} onChange={handleKnowledgeFileChange} className="hidden" accept=".pdf,.txt,.md,.csv,.xlsx,.xls" />
-                    <button onClick={() => knowledgeFileInputRef.current?.click()} className="p-2 rounded-full hover:bg-purple-500/20 bg-black/20" title="إضافة ملف معرفة للمحادثة"><BookOpenIcon /></button>
-                    <button onClick={() => setShowSettings(s => !s)} className="p-2 rounded-full hover:bg-purple-500/20 bg-black/20" title="إعدادات المحادثة الحالية"><SettingsIcon /></button>
+                    <button onClick={() => knowledgeFileInputRef.current?.click()} className="p-2 rounded-full hover:bg-purple-500/20 bg-black/20" title={t('add_knowledge_file_chat')}><BookOpenIcon /></button>
+                    <button onClick={() => setShowSettings(s => !s)} className="p-2 rounded-full hover:bg-purple-500/20 bg-black/20" title={t('current_chat_settings')}><SettingsIcon /></button>
                     {showSettings && <SettingsPopover settings={session.settings} onChange={onSettingsChange} />}
                 </div>
             </header>
@@ -1605,6 +1865,7 @@ const ChatInputBar: React.FC<{
 }> = ({isLoading, onSendMessage, onFileUpload, filePreview, activeId, onStartTyping}) => {
     const [input, setInput] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { t } = useLanguage();
 
     const handleSend = () => {
         if (!input.trim() || isLoading) return;
@@ -1637,7 +1898,7 @@ const ChatInputBar: React.FC<{
                     value={input}
                     onChange={handleInputChange}
                     onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                    placeholder="اكتب رسالتك هنا أو ارفع ملفًا..."
+                    placeholder={t('chat_placeholder')}
                     className="flex-1 p-2 px-4 bg-transparent text-white text-base outline-none disabled:opacity-50"
                     disabled={isLoading}
                 />
@@ -1646,7 +1907,7 @@ const ChatInputBar: React.FC<{
                     onClick={() => fileInputRef.current?.click()}
                     className="flex items-center justify-center text-gray-400 w-10 h-10 rounded-full transition-colors duration-300 hover:bg-purple-500/20 hover:text-white disabled:opacity-50"
                     disabled={isLoading}
-                    title="رفع ملف"
+                    title={t('upload_file')}
                 >
                     <UploadIcon />
                 </button>
@@ -1669,6 +1930,7 @@ const ChatView: React.FC<{
     customTools: CustomTool[];
     onUpdateUserProfile: (profile: Record<string, any>) => void;
     onSaveMemory: (message: Message) => void;
+    onImagesGenerated: (item: ImageHistoryItem) => void;
     sessions: Record<string, ChatSession>;
     setSessions: React.Dispatch<React.SetStateAction<Record<string, ChatSession>>>;
     activeId: string | null;
@@ -1679,10 +1941,11 @@ const ChatView: React.FC<{
     setTemporarySession: React.Dispatch<React.SetStateAction<ChatSession | null>>;
     onToggleDrawer: () => void;
 }> = ({ 
-    globalSettings, userProfile, generalMemories, savedMemories, customTools, onUpdateUserProfile, onSaveMemory, 
+    globalSettings, userProfile, generalMemories, savedMemories, customTools, onUpdateUserProfile, onSaveMemory, onImagesGenerated,
     sessions, setSessions, activeId, setActiveId, createNewSession, createTempSession,
     temporarySession, setTemporarySession, onToggleDrawer
 }) => {
+    const { language, t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState>({ isOpen: false, isCollapsed: false, name: '', type: 'unsupported', content: null });
     const [codePreview, setCodePreview] = useState({ isOpen: false, code: '', language: '' });
@@ -1712,7 +1975,7 @@ const ChatView: React.FC<{
             }
         } catch (e) {
             console.error("Error parsing file:", e);
-            setFilePreview(fp => ({ ...fp, type: 'unsupported', content: 'فشل تحليل الملف.' }));
+            setFilePreview(fp => ({ ...fp, type: 'unsupported', content: t('error_file_parse_failed') }));
         }
     };
     
@@ -1749,11 +2012,67 @@ const ChatView: React.FC<{
 
     const handleSendMessage = async (prompt: string, targetSessionId?: string) => {
         const sessionId = targetSessionId || activeId;
-        if (!sessionId || isLoading) return;
-        
+        if (!sessionId) return;
+        if (isLoading) return;
+
         let activeSession = isTempChat ? temporarySession : sessions[sessionId];
         if (!activeSession) return;
         
+        // --- Image Generation Command ---
+        if (prompt.trim().toLowerCase().startsWith('/image ')) {
+            const imagePrompt = prompt.replace(/\/image\s+/i, '').trim();
+            if (!imagePrompt) return;
+
+            const userMessage: Message = { id: Date.now().toString(), role: 'user', content: prompt };
+            const updatedMessages = [...activeSession.messages, userMessage];
+            const updatedSession = { ...activeSession, messages: updatedMessages };
+
+            if (isTempChat) setTemporarySession(updatedSession);
+            else setSessions(s => ({ ...s, [sessionId]: updatedSession }));
+
+            setIsLoading(true);
+            const aiResponseId = (Date.now() + 1).toString();
+            const aiPlaceholder: Message = { id: aiResponseId, role: 'model', content: t('generating_image_for', imagePrompt) };
+            
+            if (isTempChat) setTemporarySession(s => s ? { ...s, messages: [...s.messages, aiPlaceholder] } : null);
+            else setSessions(s => ({ ...s, [sessionId]: { ...s[sessionId], messages: [...s[sessionId].messages, aiPlaceholder] } }));
+
+            try {
+                const enhancedPrompt = await enhancePromptForImage(imagePrompt, 'cinematic');
+                const generatedUrls = await generateImageService(enhancedPrompt, '1:1', 1);
+
+                const newHistoryItem: ImageHistoryItem = {
+                    id: Date.now().toString(),
+                    urls: generatedUrls,
+                    prompt: imagePrompt,
+                    enhancedPrompt: enhancedPrompt,
+                    model: 'gemini',
+                    style: 'cinematic',
+                    aspectRatio: '1:1',
+                    timestamp: Date.now()
+                };
+                onImagesGenerated(newHistoryItem);
+
+                const aiFinalMessage: Message = { id: aiResponseId, role: 'model', content: t('image_generated_for', imagePrompt), images: generatedUrls };
+                
+                const updater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? aiFinalMessage : m) } : null;
+
+                if (isTempChat) setTemporarySession(updater);
+                else setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
+
+            } catch (error) {
+                 const aiErrorMessage: Message = { id: aiResponseId, role: 'model', content: t('error_image_generation_failed_short') };
+                 const updater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? aiErrorMessage : m) } : null;
+                 if (isTempChat) setTemporarySession(updater);
+                 else setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
+            } finally {
+                setIsLoading(false);
+            }
+            return;
+        }
+
+
+        // --- Regular Chat Message ---
         const userMessageParts: Part[] = [];
         let userMessageUI: Partial<Message> = { content: prompt };
 
@@ -1762,7 +2081,7 @@ const ChatView: React.FC<{
             let fileContext = filePreview.type === 'text' 
                 ? (filePreview.content as string)
                 : (filePreview.content as string[][]).map(row => row.join(',')).join('\n');
-            fullPrompt = `بالاعتماد على محتوى الملف التالي:\n\n---\n${fileContext}\n---\n\nأجب على السؤال التالي: ${prompt}`;
+            fullPrompt = t('prompt_with_file_context', fileContext, prompt);
             userMessageUI.filePreview = { name: filePreview.name, type: filePreview.type };
         }
         userMessageParts.push({ text: fullPrompt });
@@ -1814,7 +2133,8 @@ const ChatView: React.FC<{
                 activeTool,
                 sessions,
                 savedMemories,
-                activeSession.knowledgeFiles || []
+                activeSession.knowledgeFiles || [],
+                language
             );
 
             let sources: any[] = [];
@@ -1862,7 +2182,7 @@ const ChatView: React.FC<{
 
         } catch (error) {
             console.error("Error generating response:", error);
-            const errorMessage: Message = { id: aiResponseId, role: 'model', content: 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.' };
+            const errorMessage: Message = { id: aiResponseId, role: 'model', content: t('error_general_response') };
             
             const errorUpdater = (s: ChatSession | null) => {
                 if (!s) return null;
@@ -1956,8 +2276,8 @@ const ChatView: React.FC<{
     
     const handleStudyFollowUp = (type: 'review' | 'quiz', topic: string) => {
         const prompt = type === 'review' 
-            ? `يرجى إنشاء مراجعة للموضوع التالي: ${topic}` 
-            : `يرجى إنشاء اختبار حول الموضوع التالي: ${topic}`;
+            ? t('prompt_create_review', topic)
+            : t('prompt_create_quiz', topic);
         handleSendMessage(prompt);
     };
 
@@ -1968,8 +2288,8 @@ const ChatView: React.FC<{
              <CodePreviewPanel isOpen={codePreview.isOpen} code={codePreview.code} onClose={handleCloseCodePreview} />
              <FilePreviewPanel preview={filePreview} onClose={closeFilePreview} />
             <div className="flex-1 flex flex-col relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-900/10 via-blue-900/10 to-transparent animate-pulse" style={{ animationDuration: '10s' }}></div>
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(138,43,226,0.08)_0%,transparent_60%)]"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-900/5 via-blue-900/5 to-transparent animate-pulse" style={{ animationDuration: '10s' }}></div>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(138,43,226,0.04)_0%,transparent_60%)]"></div>
                 
                  {!activeSession ? (
                     <WelcomeScreen onPromptSelect={handleStartNewChatWithPrompt}/>
@@ -2001,6 +2321,7 @@ const ChatView: React.FC<{
 };
 
 const Modal: React.FC<{ children: React.ReactNode, title: string, onClose: () => void, size?: 'md' | 'lg' | 'xl' | '3xl' | '5xl' }> = ({ children, title, onClose, size = 'md' }) => {
+    
     const sizeClasses = {
         md: 'md:max-w-md',
         lg: 'md:max-w-lg',
@@ -2027,6 +2348,7 @@ const Modal: React.FC<{ children: React.ReactNode, title: string, onClose: () =>
 };
 
 const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+    const { t } = useLanguage();
     const [currentView, setCurrentView] = useState<View>(View.CHAT);
     const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
         aiTone: 'friendly', creativityLevel: 'balanced', defaultInternetSearch: true, defaultDeepThinking: false, defaultScientificMode: false, darkMode: true,
@@ -2035,6 +2357,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [userProfile, setUserProfile] = useState<Record<string, any>>({});
     const [savedMemories, setSavedMemories] = useState<Message[]>([]);
     const [generalMemories, setGeneralMemories] = useState<string[]>([]);
+    const [imageHistory, setImageHistory] = useState<ImageHistoryItem[]>([]);
     
     const [sessions, setSessions] = useState<Record<string, ChatSession>>({});
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -2056,9 +2379,9 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                     // Create a default tool if none exist
                     const defaultTool: CustomTool = {
                         id: 'default-study-buddy',
-                        name: 'رفيق المذاكرة',
+                        name: t('study_buddy_tool_name'),
                         icon: '🎓',
-                        prompt: "You are a master tutor AI. When a user asks to study a topic, your first response MUST be a JSON object of type `study_explanation`. The `explanation` field should be a detailed, well-formatted string using Markdown for structure, headings, lists, tables, code blocks (` ``` `), and LaTeX math formulas (`$$...$$`). After providing the explanation, you will wait for the user to request a 'review' or a 'quiz'. If they ask for a review, respond with a `study_review` JSON. If they ask for a quiz, respond with a `study_quiz` JSON. Do not include any text outside the JSON object.",
+                        prompt: t('study_buddy_tool_prompt'),
                     };
                     setCustomTools([defaultTool]);
                     localStorage.setItem('nova-custom-tools', JSON.stringify([defaultTool]));
@@ -2087,13 +2410,16 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         }
                     }
                 }
+                
+                const savedImageHistory = localStorage.getItem('nova-image-history');
+                if(savedImageHistory) setImageHistory(JSON.parse(savedImageHistory));
 
             } catch (e) {
                 console.error("Failed to load data from storage", e);
             }
         };
         loadData();
-    }, []);
+    }, [t]);
 
     // Save chat sessions to local storage
     useEffect(() => {
@@ -2112,6 +2438,15 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             console.error("Failed to save sessions to storage", e);
         }
     }, [sessions, activeId]);
+    
+    // Save image history to local storage
+    useEffect(() => {
+        try {
+            localStorage.setItem('nova-image-history', JSON.stringify(imageHistory));
+        } catch(e) {
+            console.error("Failed to save image history to storage", e);
+        }
+    }, [imageHistory]);
 
     // Handlers to update state and local storage
     const handleUpdateSettings = (newSettings: GlobalSettings) => {
@@ -2146,6 +2481,10 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setGeneralMemories(memories);
         localStorage.setItem('nova-general-memories', JSON.stringify(memories));
     };
+    
+    const handleImagesGenerated = (item: ImageHistoryItem) => {
+        setImageHistory(prev => [item, ...prev]);
+    };
 
     const handleDeleteSession = (id: string) => {
         const newSessions = { ...sessions };
@@ -2171,11 +2510,11 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         const newId = Date.now().toString();
         const newSession: ChatSession = {
             id: newId,
-            title: tool ? tool.name : "محادثة جديدة",
+            title: tool ? tool.name : t('new_chat_title'),
             messages: tool ? [{
                 id: 'init',
                 role: 'model',
-                content: `مرحباً! أنا الآن أعمل كـ "${tool.name}". كيف أساعدك؟` 
+                content: t('tool_welcome_message', tool.name)
             }] : [],
             settings: { 
                 useInternetSearch: globalSettings.defaultInternetSearch, 
@@ -2190,17 +2529,17 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setActiveId(newId);
         setCurrentView(View.CHAT);
         return newId;
-    }, [globalSettings]);
+    }, [globalSettings, t]);
 
     const createTempSession = useCallback(() => {
         const newId = 'temp-chat';
         const newSession: ChatSession = {
             id: newId,
-            title: "محادثة مؤقتة",
+            title: t('temp_chat_title'),
             messages: [{
                 id: 'init-temp',
                 role: 'model',
-                content: 'أنت الآن في محادثة مؤقتة. لن يتم حفظ هذا الحوار.'
+                content: t('temp_chat_welcome_message')
             }],
              settings: { 
                 useInternetSearch: globalSettings.defaultInternetSearch, 
@@ -2212,18 +2551,71 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setTemporarySession(newSession);
         setActiveId(newId);
         setCurrentView(View.CHAT);
-    }, [globalSettings]);
+    }, [globalSettings, t]);
+
+    const renderMainView = () => {
+        switch(currentView) {
+            case View.CHAT:
+                 return (
+                    <ChatView 
+                        globalSettings={globalSettings} 
+                        userProfile={userProfile} 
+                        generalMemories={generalMemories} 
+                        savedMemories={savedMemories}
+                        customTools={customTools}
+                        onUpdateUserProfile={handleUpdateProfile}
+                        onSaveMemory={handleSaveMemory}
+                        onImagesGenerated={handleImagesGenerated}
+                        sessions={sessions}
+                        setSessions={setSessions}
+                        activeId={activeId}
+                        setActiveId={setActiveId}
+                        createNewSession={createNewSession}
+                        createTempSession={createTempSession}
+                        temporarySession={temporarySession}
+                        setTemporarySession={setTemporarySession}
+                        onToggleDrawer={() => setIsDrawerOpen(p => !p)}
+                    />
+                 );
+            case View.IMAGE_STUDIO:
+                return (
+                    <ImageStudioView 
+                        imageHistory={imageHistory}
+                        onImagesGenerated={handleImagesGenerated}
+                    />
+                );
+            default:
+                // Fallback to chat view if current view is a modal type
+                return (
+                     <ChatView 
+                        globalSettings={globalSettings} 
+                        userProfile={userProfile} 
+                        generalMemories={generalMemories} 
+                        savedMemories={savedMemories}
+                        customTools={customTools}
+                        onUpdateUserProfile={handleUpdateProfile}
+                        onSaveMemory={handleSaveMemory}
+                        onImagesGenerated={handleImagesGenerated}
+                        sessions={sessions}
+                        setSessions={setSessions}
+                        activeId={activeId}
+                        setActiveId={setActiveId}
+                        createNewSession={createNewSession}
+                        createTempSession={createTempSession}
+                        temporarySession={temporarySession}
+                        setTemporarySession={setTemporarySession}
+                        onToggleDrawer={() => setIsDrawerOpen(p => !p)}
+                    />
+                );
+        }
+    };
 
     const renderActiveModal = () => {
-        if (currentView === View.CHAT) return null;
-
         const handleClose = () => setCurrentView(View.CHAT);
 
         switch (currentView) {
-            case View.IMAGE_STUDIO:
-                return <Modal title="استوديو الصور" onClose={handleClose} size="3xl"><ImageStudioView /></Modal>;
             case View.SETTINGS:
-                return <Modal title="الإعدادات" onClose={handleClose} size="3xl">
+                return <Modal title={t('settings')} onClose={handleClose} size="3xl">
                     <SettingsView 
                         settings={globalSettings} 
                         onUpdate={handleUpdateSettings} 
@@ -2232,11 +2624,11 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                     />
                 </Modal>;
             case View.CREATE_TOOL:
-                return <Modal title="إدارة الأدوات" onClose={handleClose} size="5xl">
+                return <Modal title={t('manage_tools')} onClose={handleClose} size="5xl">
                     <CreateToolView tools={customTools} onUpdateTools={handleUpdateTools} />
                 </Modal>;
             case View.PROFILE:
-                return <Modal title="الملف الشخصي والذاكرة" onClose={handleClose} size="5xl">
+                return <Modal title={t('profile_and_memory')} onClose={handleClose} size="5xl">
                     <ProfileView userProfile={userProfile} savedMemories={savedMemories} onDeleteMemory={handleDeleteMemory} />
                 </Modal>;
             default:
@@ -2250,24 +2642,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                 <button onClick={() => setIsSidebarCollapsed(p => !p)} className="absolute top-1/2 -translate-y-1/2 left-4 w-7 h-7 bg-[#0c0c1f] border border-purple-500/30 rounded-full hidden lg:flex items-center justify-center text-gray-400 hover:bg-purple-500/20 z-20">
                     {isSidebarCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
                 </button>
-                <ChatView 
-                    globalSettings={globalSettings} 
-                    userProfile={userProfile} 
-                    generalMemories={generalMemories} 
-                    savedMemories={savedMemories}
-                    customTools={customTools}
-                    onUpdateUserProfile={handleUpdateProfile}
-                    onSaveMemory={handleSaveMemory}
-                    sessions={sessions}
-                    setSessions={setSessions}
-                    activeId={activeId}
-                    setActiveId={setActiveId}
-                    createNewSession={createNewSession}
-                    createTempSession={createTempSession}
-                    temporarySession={temporarySession}
-                    setTemporarySession={setTemporarySession}
-                    onToggleDrawer={() => setIsDrawerOpen(p => !p)}
-                />
+                {renderMainView()}
                 {renderActiveModal()}
             </div>
             {isDrawerOpen && <div className="lg:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setIsDrawerOpen(false)} />}
@@ -2291,11 +2666,13 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 };
 
 const LandingPageHeader: React.FC<{ onAuthClick: (page: 'login' | 'signup') => void; onNavClick: (id: string) => void }> = ({ onAuthClick, onNavClick }) => {
+    const { t } = useLanguage();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const navItems = [
-        { id: 'home', label: 'الرئيسية' },
-        { id: 'features', label: 'الميزات' },
-        { id: 'start', label: 'ابدأ المحادثة' },
+        { id: 'home', label: t('nav_home') },
+        { id: 'features', label: t('nav_features') },
+        { id: 'about', label: t('nav_about') },
+        { id: 'start', label: t('nav_start') },
     ];
     
     const handleLinkClick = (id: string, isAuth: boolean = false) => {
@@ -2319,8 +2696,8 @@ const LandingPageHeader: React.FC<{ onAuthClick: (page: 'login' | 'signup') => v
                 ))}
             </nav>
             <div className="hidden md:flex gap-4">
-                <button onClick={() => onAuthClick('login')} className="btn-secondary">تسجيل الدخول</button>
-                <button onClick={() => onAuthClick('signup')} className="btn-primary">ابدأ مجاناً</button>
+                <button onClick={() => onAuthClick('login')} className="btn-secondary">{t('login')}</button>
+                <button onClick={() => onAuthClick('signup')} className="btn-primary">{t('signup_free')}</button>
             </div>
              <div className="md:hidden">
                  <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-2xl">
@@ -2332,8 +2709,8 @@ const LandingPageHeader: React.FC<{ onAuthClick: (page: 'login' | 'signup') => v
                             <a key={item.id} href={`#${item.id}`} onClick={(e) => { e.preventDefault(); handleLinkClick(item.id, item.id === 'start'); }} className="block text-center nav-link">{item.label}</a>
                          ))}
                          <div className="flex flex-col gap-4 pt-4 border-t border-purple-500/10">
-                             <button onClick={() => { setIsMenuOpen(false); onAuthClick('login'); }} className="btn-secondary w-full">تسجيل الدخول</button>
-                             <button onClick={() => { setIsMenuOpen(false); onAuthClick('signup'); }} className="btn-primary w-full">ابدأ مجاناً</button>
+                             <button onClick={() => { setIsMenuOpen(false); onAuthClick('login'); }} className="btn-secondary w-full">{t('login')}</button>
+                             <button onClick={() => { setIsMenuOpen(false); onAuthClick('signup'); }} className="btn-primary w-full">{t('signup_free')}</button>
                          </div>
                      </div>
                  )}
@@ -2343,50 +2720,95 @@ const LandingPageHeader: React.FC<{ onAuthClick: (page: 'login' | 'signup') => v
 };
 
 
-const Hero: React.FC<{ onCTAClick: () => void }> = ({ onCTAClick }) => (
-     <section className="min-h-screen flex items-center justify-center pt-24 pb-12 px-[5%] relative overflow-hidden" id="home">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(138,43,226,0.15)_0%,transparent_50%)] -z-10"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(0,191,255,0.1)_0%,transparent_50%)] -z-10"></div>
-        <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">
-                قوة الذكاء الاصطناعي في متناول يدك
-            </h1>
-            <p className="text-lg md:text-xl mb-8 text-[#c0c0ff] leading-relaxed">
-                استكشف قوة Nova AI، وكيل الذكاء الاصطناعي المتقدم الذي يمكنه التفكير والتحليل والإبداع مثل البشر. احصل على حلول ذكية لجميع احتياجاتك من البحث في الإنترنت إلى توليد الصور وكتابة الأكواد.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button onClick={onCTAClick} className="btn-primary">ابدأ الآن مجانًا</button>
-                <button onClick={() => document.getElementById('features')?.scrollIntoView({behavior: 'smooth'})} className="btn-secondary">اكتشف الميزات</button>
-            </div>
-        </div>
-    </section>
-);
-
-const Features: React.FC = () => {
-    const featureList = [
-        { icon: <SearchIcon />, title: "البحث في الإنترنت", description: "احصل على إجابات محدثة من الويب مع ذكر المصادر لضمان الشفافية." },
-        { icon: <BrainIcon />, title: "التفكير العميق", description: "احصل على تحليلات معمقة ووجهات نظر متعددة للمواضيع المعقدة." },
-        { icon: <ImageIcon />, title: "توليد الصور", description: "حوّل أفكارك إلى صور فنية مذهلة باستخدام نماذج توليد الصور المتقدمة." },
-        { icon: <ToolIcon />, title: "أدوات مخصصة", description: "أنشئ وكلاء ذكاء اصطناعي متخصصين لمهام محددة مثل الترجمة أو كتابة الأكواد." },
-    ];
+const Hero: React.FC<{ onCTAClick: () => void }> = ({ onCTAClick }) => {
+    const { t } = useLanguage();
     return (
-        <section className="py-20 px-[5%] bg-[#050510]" id="features">
-            <div className="max-w-6xl mx-auto text-center">
-                <h2 className="text-3xl md:text-4xl font-bold mb-4">كل ما تحتاجه في مكان واحد</h2>
-                <p className="text-lg text-gray-400 mb-12">Nova AI ليس مجرد مساعد، بل هو شريكك الإبداعي والتحليلي.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                    {featureList.map((feature, i) => (
-                         <div key={i} className="feature-card">
-                            <div className="text-4xl text-purple-400 mb-4">{feature.icon}</div>
-                            <h3 className="text-xl md:text-2xl font-bold mb-2">{feature.title}</h3>
-                            <p className="text-gray-300">{feature.description}</p>
-                        </div>
-                    ))}
+        <section className="min-h-screen flex items-center justify-center pt-24 pb-12 px-[5%] relative overflow-hidden" id="home">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(138,43,226,0.15)_0%,transparent_50%)] -z-10"></div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(0,191,255,0.1)_0%,transparent_50%)] -z-10"></div>
+            <div className="max-w-4xl mx-auto text-center">
+                <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">
+                    {t('hero_title')}
+                </h1>
+                <p className="text-lg md:text-xl mb-8 text-[#c0c0ff] leading-relaxed">
+                    {t('hero_subtitle')}
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button onClick={onCTAClick} className="btn-primary">{t('hero_cta_main')}</button>
+                    <button onClick={() => document.getElementById('features')?.scrollIntoView({behavior: 'smooth'})} className="btn-secondary">{t('hero_cta_secondary')}</button>
                 </div>
             </div>
         </section>
     );
 };
+
+const DetailedFeatures: React.FC = () => {
+    const { t } = useLanguage();
+    const featureGroups = {
+        [t('features_group1_title')]: [
+            { icon: <i className="fas fa-file-import"></i>, title: t('feature1_title'), description: t('feature1_desc') },
+            { icon: <i className="fas fa-id-card"></i>, title: t('feature2_title'), description: t('feature2_desc') },
+            { icon: <i className="fas fa-chart-pie"></i>, title: t('feature3_title'), description: t('feature3_desc') },
+            { icon: <i className="fas fa-code"></i>, title: t('feature4_title'), description: t('feature4_desc') },
+            { icon: <i className="fas fa-graduation-cap"></i>, title: t('feature5_title'), description: t('feature5_desc') },
+        ],
+        [t('features_group2_title')]: [
+            { icon: <i className="fas fa-palette"></i>, title: t('feature6_title'), description: t('feature6_desc') },
+            { icon: <i className="fas fa-comments"></i>, title: t('feature7_title'), description: t('feature7_desc') },
+            { icon: <i className="fas fa-magic"></i>, title: t('feature8_title'), description: t('feature8_desc') },
+            { icon: <i className="fas fa-feather-alt"></i>, title: t('feature9_title'), description: t('feature9_desc') },
+        ],
+        [t('features_group3_title')]: [
+            { icon: <SearchIcon />, title: t('feature10_title'), description: t('feature10_desc') },
+            { icon: <BrainIcon />, title: t('feature11_title'), description: t('feature11_desc') },
+            { icon: <ToolIcon />, title: t('feature12_title'), description: t('feature12_desc') },
+        ],
+    };
+
+    return (
+        <section className="py-20 px-[5%] bg-[#050510]" id="features">
+            <div className="max-w-7xl mx-auto text-center">
+                <h2 className="text-3xl md:text-4xl font-bold mb-4">{t('features_main_title')}</h2>
+                <p className="text-lg text-gray-400 mb-12">{t('features_main_subtitle')}</p>
+                {Object.entries(featureGroups).map(([groupTitle, features]) => (
+                    <div key={groupTitle} className="mb-16">
+                        <h3 className="text-2xl md:text-3xl font-bold mb-8 text-purple-300">{groupTitle}</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                            {features.map((feature, i) => (
+                                <div key={i} className="feature-card h-full">
+                                    <div className="text-4xl text-purple-400 mb-4">{feature.icon}</div>
+                                    <h4 className="text-xl font-bold mb-2">{feature.title}</h4>
+                                    <p className="text-gray-300 text-sm">{feature.description}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+};
+
+const AboutSection: React.FC = () => {
+    const { t } = useLanguage();
+    return (
+        <section className="py-20 px-[5%]" id="about">
+            <div className="max-w-4xl mx-auto text-center">
+                <h2 className="text-3xl md:text-4xl font-bold mb-4">{t('about_title')}</h2>
+                <p className="text-lg text-gray-300 leading-relaxed mb-8">
+                    {t('about_p1')} <strong className="text-white">محمد إبراهيم عبدالله</strong>, {t('about_p2')}
+                    <br/><br/>
+                    {t('about_p3')}
+                </p>
+                <div className="flex justify-center items-center gap-6">
+                    <a href="https://github.com/Mohammed5778" target="_blank" rel="noopener noreferrer" className="social-link"><i className="fab fa-github"></i></a>
+                    <a href="https://www.linkedin.com/in/mohammed-ibrahim-abdullah-a56066269/" target="_blank" rel="noopener noreferrer" className="social-link"><i className="fab fa-linkedin"></i></a>
+                    <a href="https://craft-my-flow.vercel.app/" target="_blank" rel="noopener noreferrer" className="social-link"><i className="fas fa-globe"></i></a>
+                </div>
+            </div>
+        </section>
+    );
+}
 
 const AuthModal: React.FC<{ children: React.ReactNode, title: string, onClose: () => void }> = ({ children, title, onClose }) => (
     <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
@@ -2398,49 +2820,66 @@ const AuthModal: React.FC<{ children: React.ReactNode, title: string, onClose: (
     </div>
 );
 
-const LoginPage: React.FC<{ onLogin: () => void; onSwitch: () => void }> = ({ onLogin, onSwitch }) => (
-    <form onSubmit={e => {e.preventDefault(); onLogin();}} className="space-y-6">
-        <div>
-            <label className="block text-sm font-bold mb-2">البريد الإلكتروني</label>
-            <input type="email" placeholder="you@example.com" className="modal-input" required />
-        </div>
-        <div>
-            <label className="block text-sm font-bold mb-2">كلمة المرور</label>
-            <input type="password" placeholder="********" className="modal-input" required />
-        </div>
-        <button type="submit" className="btn-primary w-full !py-3">تسجيل الدخول</button>
-        <p className="text-center text-sm">
-            ليس لديك حساب؟ <button type="button" onClick={onSwitch} className="text-purple-400 hover:underline">أنشئ حسابًا</button>
-        </p>
-    </form>
-);
-const SignUpPage: React.FC<{ onSignUp: () => void; onSwitch: () => void }> = ({ onSignUp, onSwitch }) => (
-     <form onSubmit={e => {e.preventDefault(); onSignUp();}} className="space-y-6">
-        <div>
-            <label className="block text-sm font-bold mb-2">البريد الإلكتروني</label>
-            <input type="email" placeholder="you@example.com" className="modal-input" required />
-        </div>
-        <div>
-            <label className="block text-sm font-bold mb-2">كلمة المرور</label>
-            <input type="password" placeholder="********" className="modal-input" required />
-        </div>
-        <button type="submit" className="btn-primary w-full !py-3">إنشاء حساب</button>
-        <p className="text-center text-sm">
-            لديك حساب بالفعل؟ <button type="button" onClick={onSwitch} className="text-purple-400 hover:underline">سجل الدخول</button>
-        </p>
-    </form>
-);
-const Footer: React.FC = () => (
-    <footer className="bg-[#050510] border-t border-[rgba(138,43,226,0.2)] py-8 px-[5%]">
-        <div className="max-w-7xl mx-auto text-center text-gray-400">
-            <p>&copy; {new Date().getFullYear()} Nova AI. جميع الحقوق محفوظة.</p>
-        </div>
-    </footer>
-);
+const LoginPage: React.FC<{ onLogin: () => void; onSwitch: () => void }> = ({ onLogin, onSwitch }) => {
+    const { t } = useLanguage();
+    return (
+        <form onSubmit={e => {e.preventDefault(); onLogin();}} className="space-y-6">
+            <div>
+                <label className="block text-sm font-bold mb-2">{t('email_label')}</label>
+                <input type="email" placeholder="you@example.com" className="modal-input" required />
+            </div>
+            <div>
+                <label className="block text-sm font-bold mb-2">{t('password_label')}</label>
+                <input type="password" placeholder="********" className="modal-input" required />
+            </div>
+            <button type="submit" className="btn-primary w-full !py-3">{t('login')}</button>
+            <p className="text-center text-sm">
+                {t('no_account')} <button type="button" onClick={onSwitch} className="text-purple-400 hover:underline">{t('create_one')}</button>
+            </p>
+        </form>
+    );
+};
+const SignUpPage: React.FC<{ onSignUp: () => void; onSwitch: () => void }> = ({ onSignUp, onSwitch }) => {
+    const { t } = useLanguage();
+    return (
+        <form onSubmit={e => {e.preventDefault(); onSignUp();}} className="space-y-6">
+            <div>
+                <label className="block text-sm font-bold mb-2">{t('email_label')}</label>
+                <input type="email" placeholder="you@example.com" className="modal-input" required />
+            </div>
+            <div>
+                <label className="block text-sm font-bold mb-2">{t('password_label')}</label>
+                <input type="password" placeholder="********" className="modal-input" required />
+            </div>
+            <button type="submit" className="btn-primary w-full !py-3">{t('create_account')}</button>
+            <p className="text-center text-sm">
+                {t('already_have_account')} <button type="button" onClick={onSwitch} className="text-purple-400 hover:underline">{t('login')}</button>
+            </p>
+        </form>
+    );
+};
+const Footer: React.FC = () => {
+    const { t } = useLanguage();
+    return (
+        <footer className="bg-[#050510] border-t border-[rgba(138,43,226,0.2)] py-10 px-[5%]">
+            <div className="max-w-7xl mx-auto text-center text-gray-400">
+                <h3 className="text-lg font-bold text-white mb-4">Mohammed Ibrahim Abdullah</h3>
+                <div className="flex justify-center items-center gap-6 mb-6">
+                    <a href="https://github.com/Mohammed5778" target="_blank" rel="noopener noreferrer" className="social-link-footer"><i className="fab fa-github"></i></a>
+                    <a href="https://www.linkedin.com/in/mohammed-ibrahim-abdullah-a56066269/" target="_blank" rel="noopener noreferrer" className="social-link-footer"><i className="fab fa-linkedin"></i></a>
+                    <a href="https://craft-my-flow.vercel.app/" target="_blank" rel="noopener noreferrer" className="social-link-footer"><i className="fas fa-globe"></i></a>
+                    <a href="https://wa.me/201099113383" target="_blank" rel="noopener noreferrer" className="social-link-footer"><i className="fab fa-whatsapp"></i></a>
+                </div>
+                <p>&copy; {new Date().getFullYear()} Nova AI. {t('all_rights_reserved')}</p>
+            </div>
+        </footer>
+    );
+};
 
 const LandingPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess }) => {
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [showSignupModal, setShowSignupModal] = useState(false);
+    const { t } = useLanguage();
     
     const handleAuthNav = (page: 'login' | 'signup') => {
         setShowLoginModal(page === 'login');
@@ -2448,7 +2887,10 @@ const LandingPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess 
     };
     
     const handleNavClick = (id: string) => {
-        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+        const element = document.getElementById(id);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     };
 
     return (
@@ -2456,21 +2898,22 @@ const LandingPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess 
             <LandingPageHeader onAuthClick={handleAuthNav} onNavClick={handleNavClick} />
             <main>
                 <Hero onCTAClick={() => handleAuthNav('signup')} />
-                <Features />
+                <DetailedFeatures />
+                <AboutSection />
             </main>
             <Footer />
-            {showLoginModal && <AuthModal title="تسجيل الدخول" onClose={() => setShowLoginModal(false)}>
+            {showLoginModal && <AuthModal title={t('login_modal_title')} onClose={() => setShowLoginModal(false)}>
                 <LoginPage onLogin={onLoginSuccess} onSwitch={() => { setShowLoginModal(false); setShowSignupModal(true); }} />
             </AuthModal>}
-             {showSignupModal && <AuthModal title="إنشاء حساب جديد" onClose={() => setShowSignupModal(false)}>
+             {showSignupModal && <AuthModal title={t('signup_modal_title')} onClose={() => setShowSignupModal(false)}>
                 <SignUpPage onSignUp={onLoginSuccess} onSwitch={() => { setShowSignupModal(false); setShowLoginModal(true); }} />
             </AuthModal>}
         </div>
     );
 };
 
-// MAIN APP COMPONENT
-const App: React.FC = () => {
+// Wrapper for the main app logic to use the language context
+const AppContent: React.FC = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
@@ -2493,8 +2936,19 @@ const App: React.FC = () => {
     return (
         <>
             {isLoggedIn ? <ApplicationShell onLogout={handleLogout} /> : <LandingPage onLoginSuccess={handleLogin} />}
+        </>
+    );
+};
+
+
+// MAIN APP COMPONENT
+const App: React.FC = () => {
+    return (
+        <LanguageProvider>
+            <AppContent />
             <style>{`
                 :root { --custom-scroll-track: #0a0a1a; --custom-scroll-thumb: #8a2be2; }
+                html { scroll-behavior: smooth; }
                 .prose { color: #f0f0ff; }
                 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { color: #f0f0ff; }
                 .btn-primary {
@@ -2511,8 +2965,12 @@ const App: React.FC = () => {
                 .nav-link:hover { color: #00bfff; }
                 .nav-link::after { content: ''; position: absolute; bottom: 0; left: 0; width: 0; height: 2px; background: linear-gradient(135deg, #8a2be2, #00bfff); transition: width 0.3s ease; }
                 .nav-link:hover::after { width: 100%; }
-                .feature-card { background: rgba(20, 20, 40, 0.6); border-radius: 1rem; padding: 2rem; text-align: center; transition: all 0.3s ease; border: 1px solid rgba(138, 43, 226, 0.2); }
+                .feature-card { display: flex; flex-direction: column; background: rgba(20, 20, 40, 0.6); border-radius: 1rem; padding: 2rem; text-align: center; transition: all 0.3s ease; border: 1px solid rgba(138, 43, 226, 0.2); }
                 .feature-card:hover { transform: translateY(-10px); box-shadow: 0 10px 30px rgba(138, 43, 226, 0.3); border-color: rgba(138, 43, 226, 0.5); }
+                .social-link { font-size: 1.75rem; color: #a3a3c2; transition: all 0.3s ease; }
+                .social-link:hover { color: #00bfff; transform: scale(1.1); }
+                .social-link-footer { font-size: 1.5rem; color: #a3a3c2; transition: all 0.3s ease; }
+                .social-link-footer:hover { color: #00bfff; transform: scale(1.1); }
                 .modal-input { width: 100%; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #8a2be2; background: #050510; color: white; outline: none; transition: all 0.2s; }
                 .modal-input:focus { box-shadow: 0 0 0 2px #00bfff; }
                 @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
@@ -2604,7 +3062,7 @@ const App: React.FC = () => {
                 .markdown-table tr:nth-child(even) { background-color: rgba(30,30,62,0.4); }
 
             `}</style>
-        </>
+        </LanguageProvider>
     );
 };
 

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import { getAiResponseStream, generateImage as generateImageService, extractUserInfo, enhancePromptForImage } from './services/geminiService';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -39,6 +40,7 @@ const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children })
 
     useEffect(() => {
         document.documentElement.lang = language;
+        document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     }, [language]);
 
 
@@ -117,6 +119,8 @@ interface ResumeContent {
     education: { degree:string; institution:string; dates:string; details?: string; }[];
     skills: { category: string; items: string[]; }[];
     projects?: { name: string; description: string; link?: string; }[];
+    profilePicture?: string; // Base64 Data URL
+    template?: 'modern' | 'classic' | 'creative' | 'ats' | 'elegant';
 }
 interface CodeProjectContent {
     type: 'code_project';
@@ -503,19 +507,50 @@ const CodeProjectView: React.FC<{ project: CodeProjectContent, onPreviewCode: (c
     );
 };
 
-const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
+const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: ResumeContent) => void }> = ({ resume, onUpdate }) => {
     const resumeRef = useRef<HTMLDivElement>(null);
+    const photoInputRef = useRef<HTMLInputElement>(null);
     const { name, title, contact, summary, experience, education, skills, projects } = resume;
     const { t } = useLanguage();
+    const template = resume.template || 'modern';
+
+    const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+    });
+
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            const dataUrl = await fileToDataUrl(file);
+            onUpdate({ ...resume, profilePicture: dataUrl });
+        }
+    };
+    
+    const handleTemplateChange = (newTemplate: 'modern' | 'classic' | 'creative' | 'ats' | 'elegant') => {
+        onUpdate({ ...resume, template: newTemplate });
+    };
 
     const handleExport = () => {
         if (resumeRef.current) {
-            html2canvas(resumeRef.current, {
+            const elToClone = resumeRef.current;
+            // Temporarily set direction for canvas rendering if creative template
+            const originalDir = elToClone.dir;
+            if (template === 'creative') {
+                elToClone.dir = 'ltr';
+            }
+            
+            html2canvas(elToClone, {
                 scale: 2,
                 backgroundColor: '#ffffff',
-                windowWidth: resumeRef.current.scrollWidth,
-                windowHeight: resumeRef.current.scrollHeight,
+                windowWidth: elToClone.scrollWidth,
+                windowHeight: elToClone.scrollHeight,
             }).then(canvas => {
+                // Restore original direction
+                elToClone.dir = originalDir;
+
                 const imgData = canvas.toDataURL('image/png');
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -545,26 +580,46 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
     
     return (
         <div className="bg-gray-800/50 p-0.5 rounded-lg my-2 border border-purple-500/30">
-            <div className="flex justify-between items-center p-2 bg-gray-950/50 rounded-t-lg">
-                <span className="text-xs text-purple-300 font-mono">{t('resume_ats')}</span>
+            <div className="flex justify-between items-center p-2 bg-gray-950/50 rounded-t-lg flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <input type="file" ref={photoInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
+                    <button onClick={() => photoInputRef.current?.click()} className="resume-control-btn">
+                        <i className="fas fa-camera mr-2"></i>{t('upload_photo')}
+                    </button>
+                    
+                    <div className="flex items-center gap-1 bg-black/20 p-1 rounded-md">
+                        <button onClick={() => handleTemplateChange('elegant')} className={`resume-template-btn ${template === 'elegant' ? 'active' : ''}`}>{t('template_elegant')}</button>
+                        <button onClick={() => handleTemplateChange('modern')} className={`resume-template-btn ${template === 'modern' ? 'active' : ''}`}>{t('template_modern')}</button>
+                        <button onClick={() => handleTemplateChange('classic')} className={`resume-template-btn ${template === 'classic' ? 'active' : ''}`}>{t('template_classic')}</button>
+                        <button onClick={() => handleTemplateChange('creative')} className={`resume-template-btn ${template === 'creative' ? 'active' : ''}`}>{t('template_creative')}</button>
+                        <button onClick={() => handleTemplateChange('ats')} className={`resume-template-btn ${template === 'ats' ? 'active' : ''}`}>{t('template_ats')}</button>
+                    </div>
+                </div>
                 <button onClick={handleExport} className="text-gray-400 hover:text-white transition-colors text-xs p-1 rounded flex items-center gap-1">
                     <DownloadIcon /> {t('export_pdf')}
                 </button>
             </div>
-            <div ref={resumeRef} className="resume-view">
+            <div ref={resumeRef} className={`resume-view ${template}-template`}>
                 <header className="resume-header">
-                    <h1>{name}</h1>
-                    <h2>{title}</h2>
-                    <div className="resume-contact">
-                        {contact.email && <span><i className="fas fa-envelope"></i> {contact.email}</span>}
+                     {resume.profilePicture && (
+                        <div className="profile-picture-container">
+                            <img src={resume.profilePicture} alt={resume.name} />
+                        </div>
+                    )}
+                    <div className="resume-header-text">
+                        <h1>{name}</h1>
+                        <h2>{title}</h2>
+                    </div>
+                     <div className="resume-contact">
+                        {contact.email && <span><i className="fas fa-envelope"></i> <a href={`mailto:${contact.email}`}>{contact.email}</a></span>}
                         {contact.phone && <span><i className="fas fa-phone"></i> {contact.phone}</span>}
-                        {contact.linkedin && <span><i className="fab fa-linkedin"></i> {contact.linkedin}</span>}
-                        {contact.github && <span><i className="fab fa-github"></i> {contact.github}</span>}
-                        {contact.website && <span><i className="fas fa-globe"></i> {contact.website}</span>}
+                        {contact.linkedin && <span><i className="fab fa-linkedin"></i> <a href={`https://${contact.linkedin}`} target="_blank" rel="noopener noreferrer">{contact.linkedin}</a></span>}
+                        {contact.github && <span><i className="fab fa-github"></i> <a href={`https://github.com/${contact.github}`} target="_blank" rel="noopener noreferrer">{contact.github}</a></span>}
+                        {contact.website && <span><i className="fas fa-globe"></i> <a href={`https://${contact.website}`} target="_blank" rel="noopener noreferrer">{contact.website}</a></span>}
                     </div>
                 </header>
-                <main className="resume-body">
-                    <section className="resume-main-content">
+                <div className="resume-body-container">
+                    <main className="resume-main-content">
                         <div className="resume-section">
                             <h3><i className="fas fa-user-tie"></i> {t('professional_summary')}</h3>
                             <p>{summary}</p>
@@ -592,8 +647,18 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
                                 ))}
                             </div>
                         )}
-                    </section>
+                    </main>
                     <aside className="resume-sidebar">
+                        <div className="resume-section resume-contact-sidebar">
+                             <h3><i className="fas fa-address-book"></i> {t('contact')}</h3>
+                             <div className="resume-contact">
+                                {contact.email && <span><i className="fas fa-envelope"></i> {contact.email}</span>}
+                                {contact.phone && <span><i className="fas fa-phone"></i> {contact.phone}</span>}
+                                {contact.linkedin && <span><i className="fab fa-linkedin"></i> {contact.linkedin}</span>}
+                                {contact.github && <span><i className="fab fa-github"></i> {contact.github}</span>}
+                                {contact.website && <span><i className="fas fa-globe"></i> {contact.website}</span>}
+                            </div>
+                        </div>
                         <div className="resume-section">
                             <h3><i className="fas fa-graduation-cap"></i> {t('education')}</h3>
                              {education.map((edu, i) => (
@@ -608,14 +673,14 @@ const ResumeView: React.FC<{ resume: ResumeContent }> = ({ resume }) => {
                         <div className="resume-section">
                             <h3><i className="fas fa-cogs"></i> {t('skills')}</h3>
                              {skills.map((skillCat, i) => (
-                                <div key={i} className="mb-2">
+                                <div key={i} className="mb-2 skills-category">
                                     <h4>{skillCat.category}</h4>
                                     <p>{skillCat.items.join(', ')}</p>
                                 </div>
                             ))}
                         </div>
                     </aside>
-                </main>
+                </div>
             </div>
         </div>
     );
@@ -908,7 +973,7 @@ const MessageBubble: React.FC<{
                                         }}
                                     />;
                 case 'news_report': return <NewsReportView {...richContent} />;
-                case 'resume': return <ResumeView resume={richContent} />;
+                case 'resume': return <ResumeView resume={richContent} onUpdate={(updatedResume) => onUpdateMessageContent(message.id, updatedResume)} />;
                 case 'code_project': return <CodeProjectView project={richContent} onPreviewCode={onPreviewCode} />;
                 case 'study_explanation': return <StudyExplanationView data={richContent} onFollowUp={onStudyFollowUp} onPreviewCode={onPreviewCode} />;
                 case 'study_review': return <StudyReviewView data={richContent} />;
@@ -2162,7 +2227,11 @@ const ChatView: React.FC<{
                 const potentialJson = fullResponse.substring(fullResponse.indexOf('{'), fullResponse.lastIndexOf('}') + 1);
                 const parsed = JSON.parse(potentialJson);
                 if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project', 'study_explanation', 'study_review', 'study_quiz'].includes(parsed.type)) {
-                    finalContent = parsed;
+                    if (parsed.type === 'resume') {
+                         finalContent = { ...parsed, template: 'elegant' }; // Set default template for new resumes
+                    } else {
+                         finalContent = parsed;
+                    }
                 }
             } catch (e) { /* Not a JSON, treat as text */ }
             
@@ -3025,41 +3094,214 @@ const App: React.FC = () => {
                     color: #374151;
                     white-space: pre-wrap;
                 }
-                /* Resume View Styles */
-                .resume-view { background-color: #fff; color: #333; font-family: 'Segoe UI', sans-serif; padding: 1rem; md:padding: 2rem; direction: rtl; text-align: right; }
-                .resume-header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 1rem; margin-bottom: 1.5rem; }
-                .resume-header h1 { font-size: 2rem; md:font-size: 2.5rem; font-weight: 700; color: #8a2be2; margin: 0; }
-                .resume-header h2 { font-size: 1.1rem; md:font-size: 1.25rem; font-weight: 400; color: #555; margin: 0.25rem 0; }
-                .resume-contact { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 1.5rem; font-size: 0.8rem; md:font-size: 0.9rem; color: #444; margin-top: 0.75rem; }
-                .resume-contact span { display: flex; align-items: center; gap: 0.5rem; }
-                .resume-body { display: grid; grid-template-columns: 1fr; md:grid-template-columns: 2fr 1fr; gap: 1.5rem; md:gap: 2rem; }
-                .resume-section h3 { font-size: 1.2rem; md:font-size: 1.4rem; font-weight: 600; color: #333; border-bottom: 2px solid #8a2be2; padding-bottom: 0.5rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-                .resume-item { margin-bottom: 1.25rem; }
-                .resume-item h4 { font-size: 1rem; md:font-size: 1.1rem; font-weight: 600; margin-bottom: 0.1rem; }
-                .resume-item h5 { font-size: 0.9rem; md:font-size: 1rem; font-weight: 500; color: #555; margin-bottom: 0.2rem; }
-                .resume-item h6 { font-size: 0.8rem; md:font-size: 0.9rem; font-style: italic; color: #777; margin-bottom: 0.5rem; }
-                .resume-item ul { list-style-position: outside; padding-right: 1.2rem; margin: 0; font-size: 0.9rem; md:font-size: 0.95rem; line-height: 1.6; }
-                .resume-item p, .resume-section p { font-size: 0.9rem; md:font-size: 0.95rem; line-height: 1.6; color: #444; }
-                .resume-sidebar { border-right: none; md:border-right: 1px solid #eee; padding-right: 0; md:padding-right: 2rem; border-top: 1px solid #eee; md:border-top: none; padding-top: 1rem; md:padding-top: 0; }
-                
-                /* Code Project View Styles */
-                .code-project-view { padding: 0.5rem; }
-                .review-section { background: rgba(10, 10, 26, 0.7); padding: 1rem; border-radius: 0.5rem; border-left: 3px solid #8a2be2; }
-                .review-title { font-size: 1.1rem; font-weight: 700; color: #c0c0ff; margin-bottom: 0.5rem; display: flex; align-items: center;}
-                .review-section p, .review-section li { font-size: 0.9rem; color: #e0e0ff; }
+                /* --- Resume View General Styles --- */
+                .resume-control-btn {
+                    background-color: rgba(255, 255, 255, 0.1);
+                    color: white;
+                    padding: 4px 10px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    transition: background-color 0.2s;
+                }
+                .resume-control-btn:hover { background-color: rgba(255, 255, 255, 0.2); }
+                .resume-template-btn {
+                    background-color: transparent;
+                    color: #aaa;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    transition: all 0.2s;
+                }
+                .resume-template-btn:hover { color: white; background-color: rgba(138, 43, 226, 0.4); }
+                .resume-template-btn.active { color: white; background-color: #8a2be2; }
+                .resume-view { background-color: #fff; color: #333; overflow: hidden; }
+                .resume-view h1, .resume-view h2, .resume-view h3, .resume-view h4, .resume-view h5, .resume-view h6, .resume-view p, .resume-view li, .resume-view span, .resume-view a { font-family: inherit; }
+                .resume-section { margin-bottom: 1.25rem; }
+                .resume-section h3 { font-weight: bold; }
+                .resume-section h3 i { display: none; }
+                .resume-item { margin-bottom: 1rem; }
+                .resume-item h4 { font-weight: bold; }
+                .resume-item ul { list-style-position: outside; padding-right: 1.2rem; margin-top: 0.25rem; }
+                .resume-header .resume-contact, .resume-sidebar .resume-contact { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; font-size: 0.9rem; }
+                .resume-header .resume-contact span, .resume-sidebar .resume-contact span { display: flex; align-items: center; gap: 0.5rem; }
+                .profile-picture-container { margin: 0 auto 1rem; overflow: hidden; }
+                .profile-picture-container img { object-fit: cover; width: 100%; height: 100%; }
+                .resume-contact-sidebar { display: none; }
 
-                /* Study Session View Styles */
-                .study-session-view { background: rgba(10, 10, 26, 0.7); border: 1px solid rgba(138, 43, 226, 0.2); border-radius: 0.75rem; padding: 1rem 1.5rem; }
-                .study-topic-title { font-size: 1.75rem; font-weight: 700; color: #d8b4fe; border-bottom: 2px solid rgba(138, 43, 226, 0.3); padding-bottom: 0.75rem; margin-bottom: 1.5rem; }
-                .study-section { margin-bottom: 2rem; }
-                .study-section-title { font-size: 1.25rem; font-weight: 600; color: #c084fc; margin-bottom: 1rem; }
-                .explanation-block, .review-block, .quiz-block { background: rgba(0,0,0,0.2); padding: 1.25rem; border-radius: 0.5rem; }
-                .explanation-block p { color: #e0e0ff; line-height: 1.7; }
-                .quiz-question { background: rgba(30,30,62,0.6); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
-                .markdown-table { border-collapse: collapse; width: 100%; margin-top: 1em; margin-bottom: 1em; border: 1px solid #4a044e; }
-                .markdown-table th, .markdown-table td { border: 1px solid #4a044e; padding: 0.5rem 0.75rem; }
-                .markdown-table th { background-color: #2c1a42; font-weight: bold; color: #d8b4fe; }
-                .markdown-table tr:nth-child(even) { background-color: rgba(30,30,62,0.4); }
+                /* --- Elegant Template --- */
+                .elegant-template { font-family: 'Times New Roman', Times, serif; color: #1a202c; padding: 2.5rem; direction: rtl; text-align: right;}
+                .elegant-template .resume-body-container { display: flex; gap: 2rem; }
+                .elegant-template .resume-main-content { flex: 2; }
+                .elegant-template .resume-sidebar { flex: 1; border-right: 1px solid #e2e8f0; padding-right: 1.5rem; }
+                .elegant-template .resume-header { text-align: center; border-bottom: 2px solid #2d3748; padding-bottom: 1rem; margin-bottom: 2rem; }
+                .elegant-template .resume-header .profile-picture-container { display: none; }
+                .elegant-template .resume-header h1 { font-size: 2.75rem; font-weight: bold; letter-spacing: 2px; color: #2d3748; margin: 0; }
+                .elegant-template .resume-header h2 { font-size: 1.2rem; font-weight: normal; color: #4a5568; margin-bottom: 0.75rem; }
+                .elegant-template .resume-header .resume-contact { justify-content: center; font-family: 'Helvetica', sans-serif; font-size: 0.85rem; color: #4a5568; }
+                .elegant-template .resume-section h3 { font-size: 1.2rem; color: #2d3748; border-bottom: 1px solid #718096; padding-bottom: 0.3rem; margin-bottom: 1rem; letter-spacing: 1px; }
+                .elegant-template .resume-main-content p { font-family: 'Georgia', serif; line-height: 1.6; }
+                .elegant-template .resume-item { margin-bottom: 1.25rem; }
+                .elegant-template .resume-item h4 { font-size: 1.1rem; color: #2d3748; }
+                .elegant-template .resume-item h5, .elegant-template .resume-item h6 { font-size: 0.9rem; font-style: italic; color: #718096; font-family: 'Helvetica', sans-serif; }
+                .elegant-template .resume-item ul { font-family: 'Georgia', serif; color: #4a5568; }
+                .elegant-template .resume-sidebar .resume-contact, .elegant-template .resume-sidebar .resume-item, .elegant-template .resume-sidebar .skills-category { font-family: 'Helvetica', sans-serif; font-size: 0.9rem; }
+                .elegant-template .resume-sidebar h4 { font-size: 1rem; }
+                .elegant-template .resume-sidebar .skills-category { margin-bottom: 0.75rem; }
+                .elegant-template .resume-sidebar .skills-category p { font-size: 0.85rem; color: #4a5568; }
+
+                /* --- Modern Template --- */
+                .modern-template { padding: 2rem; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; direction: rtl; text-align: right;}
+                .modern-template .resume-header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+                .modern-template .profile-picture-container { width: 120px; height: 120px; border-radius: 50%; border: 4px solid #8a2be2; margin-bottom: 1rem; }
+                .modern-template .resume-header h1 { font-size: 2.5rem; font-weight: 700; color: #8a2be2; margin: 0; }
+                .modern-template .resume-header h2 { font-size: 1.25rem; font-weight: 300; color: #555; margin-bottom: 0.75rem; }
+                .modern-template .resume-header .resume-contact { justify-content: center; }
+                .modern-template .resume-section h3 { font-size: 1.3rem; color: #333; border-bottom: 2px solid #8a2be2; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+                .modern-template .resume-item { margin-bottom: 1.25rem; }
+                .modern-template .resume-item h4 { font-size: 1.1rem; }
+                .modern-template .resume-item h5, .modern-template .resume-item h6 { font-size: 0.9rem; color: #666; }
+                .modern-template .skills-category h4 { font-weight: bold; margin-bottom: 0.25rem; }
+
+                /* --- Classic Template --- */
+                .classic-template { font-family: 'Georgia', serif; padding: 2.5rem; direction: rtl; text-align: right;}
+                .classic-template .profile-picture-container { display: none; }
+                .classic-template .resume-header { text-align: center; margin-bottom: 2rem; }
+                .classic-template .resume-header h1 { font-size: 2.5rem; font-weight: bold; }
+                .classic-template .resume-header h2 { font-size: 1.2rem; font-weight: normal; font-style: italic; color: #444; margin-bottom: 0.75rem; }
+                .classic-template .resume-header .resume-contact { justify-content: center; font-size: 0.9rem; }
+                .classic-template .resume-section h3 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 0.3rem; margin-bottom: 1rem; }
+                .classic-template .resume-item { padding-right: 1rem; border-right: 2px solid #eee; margin-bottom: 1rem; }
+                .classic-template .resume-item h4 { font-size: 1.1rem; }
+                .classic-template .skills-category h4 { font-size: 1rem; }
+
+                /* --- Creative Template (REVISED & FIXED) --- */
+                .creative-template {
+                    background-color: #fff; /* White background for the main page area */
+                    color: #212529;
+                    font-family: 'Tahoma', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                    direction: rtl; 
+                    text-align: right;
+                }
+                .creative-template .resume-header {
+                    background-color: #343a40;
+                    color: #fff;
+                    padding: 2.5rem 1.5rem;
+                    text-align: center;
+                }
+                .creative-template .profile-picture-container {
+                    width: 140px;
+                    height: 140px;
+                    border-radius: 50%;
+                    border: 4px solid #fff;
+                    margin-bottom: 1rem;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                }
+                .creative-template .resume-header-text { margin-bottom: 1rem; }
+                .creative-template .resume-header h1 {
+                    font-size: 2.8rem;
+                    font-weight: 700;
+                    margin: 0;
+                }
+                .creative-template .resume-header h2 {
+                    font-size: 1.4rem;
+                    font-weight: 300;
+                    color: #ced4da;
+                    margin-top: 0.25rem;
+                }
+                .creative-template .resume-header .resume-contact {
+                    justify-content: center;
+                    font-size: 0.9rem;
+                    gap: 0.8rem 1.5rem;
+                }
+                .creative-template .resume-header .resume-contact a {
+                    color: #adb5bd;
+                    text-decoration: none;
+                    transition: color 0.2s;
+                }
+                .creative-template .resume-header .resume-contact a:hover { color: #fff; }
+                .creative-template .resume-header .resume-contact i { color: #007bff; }
+
+                .creative-template .resume-body-container {
+                    display: flex;
+                    flex-direction: row-reverse; /* Sidebar on right */
+                    padding: 2rem;
+                    gap: 2rem;
+                    background-color: #f8f9fa;
+                }
+                .creative-template .resume-main-content {
+                    flex: 2;
+                    min-width: 0;
+                }
+                .creative-template .resume-sidebar {
+                    flex: 1;
+                    min-width: 0;
+                }
+                .creative-template .resume-contact-sidebar { display: none; }
+                
+                .creative-template .resume-section h3 {
+                    font-size: 1.3rem;
+                    font-weight: 700;
+                    color: #007bff;
+                    border-bottom: 2px solid #dee2e6;
+                    padding-bottom: 0.5rem;
+                    margin-bottom: 1.5rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                }
+                .creative-template .resume-section h3 i { display: inline-block; font-size: 1.1rem; }
+
+                .creative-template .resume-main-content .resume-item h4 { font-size: 1.1rem; font-weight: bold; }
+                .creative-template .resume-main-content .resume-item h5 { font-size: 1rem; color: #495057; margin: 0.2rem 0; }
+                .creative-template .resume-main-content .resume-item h6 { font-size: 0.9rem; color: #6c757d; margin-bottom: 0.5rem; }
+                .creative-template .resume-main-content .resume-item ul { color: #343a40; padding-right: 1.5rem; list-style-position: outside; }
+                .creative-template .resume-main-content .resume-item li { margin-bottom: 0.3rem; line-height: 1.6; }
+                .creative-template .resume-main-content p { line-height: 1.6; color: #343a40; }
+                
+                .creative-template .resume-sidebar .resume-item h4 { font-size: 1.05rem; }
+                .creative-template .resume-sidebar .resume-item h5,
+                .creative-template .resume-sidebar .resume-item h6 { font-size: 0.9rem; }
+                .creative-template .skills-category h4 { font-weight: bold; color: #212529; font-size: 1rem; margin-bottom: 0.4rem; }
+                .creative-template .skills-category p { font-size: 0.9rem; line-height: 1.7; color: #495057; }
+                
+                @media (max-width: 768px) {
+                    .creative-template .resume-body-container {
+                        flex-direction: column;
+                    }
+                }
+                
+                /* --- ATS Template --- */
+                .ats-template { background-color: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 2rem; font-size: 11pt; direction: rtl; text-align: right;}
+                .ats-template .profile-picture-container, .ats-template .resume-sidebar, .ats-template .resume-section h3 i { display: none; }
+                .ats-template .resume-header { text-align: center; margin-bottom: 1.5rem; }
+                .ats-template .resume-header h1 { font-size: 1.8rem; font-weight: bold; margin-bottom: 0.25rem; }
+                .ats-template .resume-header h2 { font-size: 1.1rem; font-weight: normal; margin-bottom: 0.5rem; }
+                .ats-template .resume-contact { justify-content: center; font-size: 10pt; }
+                .ats-template .resume-section { margin-bottom: 0.5rem; }
+                .ats-template .resume-section h3 { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 0.25rem; margin: 1rem 0 0.5rem; text-transform: uppercase; }
+                .ats-template .resume-item { margin-bottom: 0.75rem; }
+                .ats-template .resume-item h4 { font-size: 1rem; font-weight: bold; }
+                .ats-template .resume-item h5 { font-size: 0.9rem; font-style: normal; color: #333; }
+                .ats-template .resume-item h6 { font-size: 0.9rem; color: #555; }
+                .ats-template .resume-item ul { list-style-type: disc; padding-right: 20px; }
+                .ats-template .skills-category h4 { font-weight: bold; margin-bottom: 0.25rem; }
+                .ats-template .skills-category p { margin-top: 0; }
+                
+                /* Markdown Table Styles */
+                .markdown-table { border: 1px solid rgba(138,43,226,0.3); border-collapse: collapse; width: 100%; }
+                .markdown-table th, .markdown-table td { border: 1px solid rgba(138,43,226,0.3); padding: 8px 12px; text-align: right; }
+                .markdown-table th { background-color: rgba(30,30,62,0.8); }
+
+                /* Study Mode View Styles */
+                .study-session-view { background: rgba(10,10,26,0.5); border-radius: 0.75rem; border: 1px solid rgba(138,43,226,0.2); padding: 1.5rem; }
+                .study-topic-title { font-size: 1.75rem; font-weight: bold; margin-bottom: 1.5rem; color: #f0f0ff; }
+                .study-section-title { font-size: 1.25rem; font-weight: bold; margin-bottom: 1rem; color: #d8b4fe; border-bottom: 1px solid rgba(138,43,226,0.3); padding-bottom: 0.5rem; }
+                .explanation-block, .review-block, .quiz-block { background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 0.5rem; }
+                .quiz-question { background: rgba(30,30,62,0.5); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+
+                /* Code Project Styles */
+                .review-section { background: rgba(10,10,26,0.7); padding: 1rem; border-radius: 0.5rem; border-left: 3px solid #8a2be2; }
+                .review-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem; display: flex; align-items: center; }
 
             `}</style>
         </LanguageProvider>

@@ -36,10 +36,10 @@ interface CustomTool {
 }
 
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) {
-    throw new Error("API_KEY environment variable is not set.");
-}
+const API_KEY = "AIzaSyDWoUYK44lTPqOGmbsSQm4ZkKcmr_1jHdM";
+// if (!API_KEY) {
+//     throw new Error("API_KEY environment variable is not set.");
+// }
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const modelConfig = {

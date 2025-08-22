@@ -1,5 +1,7 @@
+
+
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { getAiResponseStream, generateImage as generateImageService, enhancePromptForImage, generateVideo as generateVideoService, extractUserInfo } from './services/geminiService';
+import { getAiResponseStream, generateImage as generateImageService, extractUserInfo, enhancePromptForImage } from './services/geminiService';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
 import { Part } from '@google/genai';
@@ -38,7 +40,7 @@ const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children })
 
     useEffect(() => {
         document.documentElement.lang = language;
-        document.documentElement.dir = 'rtl'; // Always keep RTL direction
+        document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     }, [language]);
 
 
@@ -81,7 +83,7 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
 // --- ENUMS & TYPES ---
 enum View {
     CHAT = 'CHAT',
-    CREATIVE_STUDIO = 'CREATIVE_STUDIO',
+    IMAGE_STUDIO = 'IMAGE_STUDIO',
     CREATE_TOOL = 'CREATE_TOOL',
     PROFILE = 'PROFILE',
     SETTINGS = 'SETTINGS',
@@ -138,20 +140,9 @@ interface StudyQuizContent {
         correctAnswer: string | number;
     }[];
 }
-interface YouTubeSearchResultsContent {
-    type: 'youtube_search_results';
-    query: string;
-    videos: {
-        title: string;
-        videoId: string;
-        channel: string;
-        description: string;
-        thumbnailUrl: string;
-    }[];
-}
 
 
-type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent | StudyExplanationContent | StudyReviewContent | StudyQuizContent | YouTubeSearchResultsContent;
+type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent | StudyExplanationContent | StudyReviewContent | StudyQuizContent;
 
 
 interface Message {
@@ -203,13 +194,6 @@ interface ImageHistoryItem {
     timestamp: number;
 }
 
-interface VideoHistoryItem {
-    id: string;
-    url: string;
-    prompt: string;
-    timestamp: number;
-}
-
 
 // --- ICONS ---
 const LogoIcon = ({ className = "w-8 h-8", style }: { className?: string; style?: React.CSSProperties }) => (
@@ -226,8 +210,6 @@ const LogoIcon = ({ className = "w-8 h-8", style }: { className?: string; style?
 );
 
 const ImageIcon = () => <i className="fas fa-image"></i>;
-const VideoIcon = () => <i className="fas fa-video"></i>;
-const CreativeIcon = () => <i className="fas fa-magic"></i>;
 const ToolIcon = () => <i className="fas fa-tools"></i>;
 const ProfileIcon = () => <i className="fas fa-user"></i>;
 const PaperPlaneIcon = () => <i className="fas fa-paper-plane"></i>;
@@ -443,7 +425,7 @@ const NewsReportView: React.FC<NewsReportContent> = ({ title, summary, articles 
             <h3 className="text-xl font-bold mb-2 text-purple-300">{title}</h3>
             {summary && <p className="text-sm text-gray-300 mb-4 pb-4 border-b border-purple-500/20">{summary}</p>}
             <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                {(articles || []).map((article, index) => (
+                {articles.map((article, index) => (
                     <a href={article.link} target="_blank" rel="noopener noreferrer" key={index} className="block p-3 bg-black/20 rounded-lg hover:bg-black/40 transition-colors">
                         <h4 className="font-semibold text-white">{article.headline}</h4>
                         <p className="text-xs text-blue-300 mb-1">{article.source}</p>
@@ -504,19 +486,19 @@ const CodeProjectView: React.FC<{ project: CodeProjectContent, onPreviewCode: (c
                     <div className="review-section">
                          <h5 className="review-title"><i className={`${reviewIcons.strengths} mr-2 text-green-400`}></i> {t('strengths')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
-                            {(review.strengths || []).map((item, i) => <li key={i}>{item}</li>)}
+                            {review.strengths.map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                     </div>
                     <div className="review-section">
                          <h5 className="review-title"><i className={`${reviewIcons.improvements} mr-2 text-yellow-400`}></i> {t('improvement_suggestions')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
-                            {(review.improvements || []).map((item, i) => <li key={i}>{item}</li>)}
+                            {review.improvements.map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                     </div>
                      <div className="review-section">
                          <h5 className="review-title"><i className={`${reviewIcons.nextSteps} mr-2 text-blue-400`}></i> {t('next_steps')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
-                            {(review.nextSteps || []).map((item, i) => <li key={i}>{item}</li>)}
+                            {review.nextSteps.map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                     </div>
                 </div>
@@ -644,12 +626,12 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
                         </div>
                         <div className="resume-section">
                             <h3><i className="fas fa-briefcase"></i> {t('work_experience')}</h3>
-                            {(experience || []).map((exp, i) => (
+                            {experience.map((exp, i) => (
                                 <div key={i} className="resume-item">
                                     <h4>{exp.title}</h4>
                                     <h5>{exp.company} | {exp.location}</h5>
                                     <h6>{exp.dates}</h6>
-                                    <ul>{(exp.responsibilities || []).map((r, j) => <li key={j}>{r}</li>)}</ul>
+                                    <ul>{exp.responsibilities.map((r, j) => <li key={j}>{r}</li>)}</ul>
                                 </div>
                             ))}
                         </div>
@@ -679,7 +661,7 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
                         </div>
                         <div className="resume-section">
                             <h3><i className="fas fa-graduation-cap"></i> {t('education')}</h3>
-                             {(education || []).map((edu, i) => (
+                             {education.map((edu, i) => (
                                 <div key={i} className="resume-item">
                                     <h4>{edu.degree}</h4>
                                     <h5>{edu.institution}</h5>
@@ -690,10 +672,10 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
                         </div>
                         <div className="resume-section">
                             <h3><i className="fas fa-cogs"></i> {t('skills')}</h3>
-                             {(skills || []).map((skillCat, i) => (
+                             {skills.map((skillCat, i) => (
                                 <div key={i} className="mb-2 skills-category">
                                     <h4>{skillCat.category}</h4>
-                                    <p>{(skillCat.items || []).join(', ')}</p>
+                                    <p>{skillCat.items.join(', ')}</p>
                                 </div>
                             ))}
                         </div>
@@ -703,33 +685,6 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
         </div>
     );
 };
-
-const YouTubeSearchResultsView: React.FC<YouTubeSearchResultsContent & { onPlayVideo: (videoId: string) => void }> = ({ query, videos, onPlayVideo }) => {
-    const { t } = useLanguage();
-    
-    return (
-        <div className="youtube-results-container">
-            <h4 className="font-bold mb-4">{t('youtube_search_results', query)}</h4>
-            <div className="youtube-results-grid">
-                {(videos || []).map((video) => (
-                    <div key={video.videoId} className="youtube-video-card group" onClick={() => onPlayVideo(video.videoId)}>
-                        <div className="relative">
-                            <img src={video.thumbnailUrl} alt={video.title} className="w-full h-auto rounded-t-lg" />
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <i className="fab fa-youtube text-red-500 text-5xl"></i>
-                            </div>
-                        </div>
-                        <div className="p-3">
-                            <h5 className="font-semibold text-sm line-clamp-2" title={video.title}>{video.title}</h5>
-                            <p className="text-xs text-gray-400 mt-1">{video.channel}</p>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
 
 // --- STUDY MODE COMPONENTS ---
 
@@ -830,7 +785,7 @@ const StudyReviewView: React.FC<{ data: StudyReviewContent }> = ({ data }) => {
                 <div className="review-block">
                     <h4>{data.review.title}</h4>
                     <ul className="list-disc pl-5 space-y-1">
-                        {(data.review?.points || []).map((point, i) => <li key={i}>{point}</li>)}
+                        {data.review.points.map((point, i) => <li key={i}>{point}</li>)}
                     </ul>
                 </div>
             </div>
@@ -960,16 +915,13 @@ const CodeBlock: React.FC<{ code: string; language: string; onPreview: (code: st
     );
 };
 
-interface MessageBubbleProps {
-    message: Message;
-    onSaveMemory: (message: Message) => void;
-    onPreviewCode: (code: string, language: string) => void;
-    onUpdateMessageContent: (messageId: string, newContent: RichContent | string) => void;
-    onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void;
-    onPlayVideo: (videoId: string) => void;
-}
-
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onSaveMemory, onPreviewCode, onUpdateMessageContent, onStudyFollowUp, onPlayVideo }) => {
+const MessageBubble: React.FC<{ 
+    message: Message, 
+    onSaveMemory: (message: Message) => void, 
+    onPreviewCode: (code: string, language: string) => void, 
+    onUpdateMessageContent: (messageId: string, newContent: RichContent) => void,
+    onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void 
+}> = ({ message, onSaveMemory, onPreviewCode, onUpdateMessageContent, onStudyFollowUp }) => {
     const isUser = message.role === 'user';
     const alignClass = isUser ? 'self-end' : 'self-start';
     const bgClass = isUser
@@ -1026,7 +978,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onSaveMemory, on
                 case 'study_explanation': return <StudyExplanationView data={richContent} onFollowUp={onStudyFollowUp} onPreviewCode={onPreviewCode} />;
                 case 'study_review': return <StudyReviewView data={richContent} />;
                 case 'study_quiz': return <StudyQuizView data={richContent} />;
-                case 'youtube_search_results': return <YouTubeSearchResultsView {...richContent} onPlayVideo={onPlayVideo} />;
                 default: return <p>{t('unsupported_content')}</p>;
             }
         }
@@ -1107,8 +1058,7 @@ const MainSidebar: React.FC<{
     onLogout: () => void;
     isDrawerOpen: boolean;
     onCloseDrawer: () => void;
-    userPoints: number;
-}> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, currentView, onSetView, onLogout, isDrawerOpen, onCloseDrawer, userPoints }) => {
+}> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, currentView, onSetView, onLogout, isDrawerOpen, onCloseDrawer }) => {
     const { t } = useLanguage();
     const sortedSessions = Object.values(sessions).sort((a, b) => {
         const timeA = a.messages[a.messages.length - 1]?.id || '0';
@@ -1117,7 +1067,7 @@ const MainSidebar: React.FC<{
     });
 
     const mainNavItems = [
-        { id: View.CREATIVE_STUDIO, icon: <CreativeIcon />, label: t('creative_studio') },
+        { id: View.IMAGE_STUDIO, icon: <ImageIcon />, label: t('image_studio') },
         { id: View.CREATE_TOOL, icon: <ToolIcon />, label: t('manage_tools') },
         { id: View.PROFILE, icon: <ProfileIcon />, label: t('profile') },
         { id: View.SETTINGS, icon: <SettingsIcon />, label: t('settings') },
@@ -1205,13 +1155,6 @@ const MainSidebar: React.FC<{
                 </div>
             </div>
 
-            <div className={`pt-2 border-t border-purple-500/10 w-full ${isCollapsed && !isMobile ? 'px-1' : 'px-3'}`}>
-                <div className="bg-purple-900/50 rounded-lg p-2 text-center my-2">
-                    <div className="font-bold text-lg">⚡️ {userPoints}</div>
-                    <div className="text-xs text-purple-300">{t('points')}</div>
-                </div>
-            </div>
-
             <div className="mt-auto w-full flex flex-col gap-2 pt-2 border-t border-purple-500/10">
                  {mainNavItems.map(item => (
                      <button
@@ -1258,7 +1201,7 @@ const ImageHistoryCard: React.FC<{
             <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 text-white">
                 <p className="text-xs font-mono line-clamp-4">{item.enhancedPrompt}</p>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => onDownload(item.urls[0], `nova-ai-image-${item.id}.png`)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('download')}>
+                    <button onClick={() => onDownload(item.urls[0], `nova-ai-${item.id}.png`)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('download')}>
                         <DownloadIcon />
                     </button>
                     <button onClick={() => onCopy(item.enhancedPrompt)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('copy_prompt')}>
@@ -1270,99 +1213,62 @@ const ImageHistoryCard: React.FC<{
     );
 };
 
-const VideoHistoryCard: React.FC<{
-    item: VideoHistoryItem;
-    onDownload: (url: string, filename: string) => void;
-    onCopy: (text: string) => void;
-}> = ({ item, onDownload, onCopy }) => {
-    const { t } = useLanguage();
-    return (
-        <div className="aspect-video bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20 group relative overflow-hidden animate-fade-in">
-            <video src={item.url} loop muted controls className="w-full h-full object-cover rounded-md" />
-            <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 text-white">
-                <p className="text-xs font-mono line-clamp-3">{item.prompt}</p>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => onDownload(item.url, `nova-ai-video-${item.id}.mp4`)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('download')}>
-                        <DownloadIcon />
-                    </button>
-                    <button onClick={() => onCopy(item.prompt)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('copy_prompt')}>
-                        <i className="fas fa-copy"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
-
-const CreativeStudioView: React.FC<{
+const ImageStudioView: React.FC<{
     imageHistory: ImageHistoryItem[],
-    videoHistory: VideoHistoryItem[],
-    onImageGenerated: (item: ImageHistoryItem) => void;
-    onVideoGenerated: (item: VideoHistoryItem) => void;
-    userPoints: number;
-    deductPoints: (amount: number) => boolean;
-}> = ({ imageHistory, videoHistory, onImageGenerated, onVideoGenerated, userPoints, deductPoints }) => {
+    onImagesGenerated: (items: ImageHistoryItem) => void
+}> = ({ imageHistory, onImagesGenerated }) => {
     const { t } = useLanguage();
-    const [mode, setMode] = useState<'image' | 'video'>('image');
-    const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images');
-
-    // Image State
-    const [imagePrompt, setImagePrompt] = useState('');
-    const [imageModel, setImageModel] = useState<'gemini' | 'pollinations'>('gemini');
+    const [prompt, setPrompt] = useState('');
+    const [model, setModel] = useState<'gemini' | 'pollinations'>('gemini');
     const [style, setStyle] = useState('photorealistic');
     const [numImages, setNumImages] = useState(1);
     const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
-    const [isImageLoading, setIsImageLoading] = useState(false);
-    const [imageLoadingMessage, setImageLoadingMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState('');
     const [currentImages, setCurrentImages] = useState<string[]>([]);
-    const [imageError, setImageError] = useState('');
-
-    // Video State
-    const [videoPrompt, setVideoPrompt] = useState('');
-    const [videoImage, setVideoImage] = useState<{file: File | null, url: string | null}>({file: null, url: null});
-    const videoFileInputRef = useRef<HTMLInputElement>(null);
-    const [isVideoLoading, setIsVideoLoading] = useState(false);
-    const [videoLoadingMessage, setVideoLoadingMessage] = useState('');
-    const [currentVideo, setCurrentVideo] = useState<string | null>(null);
-    const [videoError, setVideoError] = useState('');
+    const [error, setError] = useState('');
     
-    // History
-    const sortedImageHistory = [...imageHistory].sort((a,b) => b.timestamp - a.timestamp);
-    const sortedVideoHistory = [...videoHistory].sort((a,b) => b.timestamp - a.timestamp);
-    
-    // Costs
-    const imageCost = 20 * numImages;
-    const videoCost = 200;
+    const sortedHistory = [...imageHistory].sort((a,b) => b.timestamp - a.timestamp);
 
     const imageStyles = [
-        { value: 'photorealistic', label: t('style_photorealistic') }, { value: 'cinematic', label: t('style_cinematic') },
-        { value: 'fantasy', label: t('style_fantasy') }, { value: 'anime', label: t('style_anime') },
-        { value: 'digital_art', label: t('style_digital_art') }, { value: '3d_model', label: t('style_3d_model') },
+        { value: 'photorealistic', label: t('style_photorealistic') },
+        { value: 'cinematic', label: t('style_cinematic') },
+        { value: 'fantasy', label: t('style_fantasy') },
+        { value: 'anime', label: t('style_anime') },
+        { value: 'digital_art', label: t('style_digital_art') },
+        { value: '3d_model', label: t('style_3d_model') },
     ];
 
-    const handleGenerateImage = async () => {
-        if (!imagePrompt) { setImageError(t('error_prompt_required')); return; }
-        if (!deductPoints(imageCost)) return;
-
-        setIsImageLoading(true); setImageError(''); setCurrentImages([]);
-        setImageLoadingMessage(t('loading_enhancing_prompt'));
+    const handleGenerate = async () => {
+        if (!prompt) {
+            setError(t('error_prompt_required'));
+            return;
+        }
+        setIsLoading(true);
+        setError('');
+        setCurrentImages([]);
+        setLoadingMessage(t('loading_enhancing_prompt'));
 
         let finalPrompt = '';
         try {
-            finalPrompt = await enhancePromptForImage(imagePrompt, style);
-            setImageLoadingMessage(t('loading_generating_images'));
+            finalPrompt = await enhancePromptForImage(prompt, style);
+            setLoadingMessage(t('loading_generating_images'));
         } catch (e) {
-            console.error("Prompt enhancement failed:", e); setImageError(t('error_prompt_enhancement_failed'));
-            finalPrompt = imagePrompt; // Fallback
+            console.error("Prompt enhancement failed:", e);
+            setError(t('error_prompt_enhancement_failed'));
+            finalPrompt = prompt; // Fallback to original prompt
         }
         
+        let generatedUrls: string[] = [];
+
         try {
-            let generatedUrls: string[];
-            if (imageModel === 'gemini') {
+            if (model === 'gemini') {
                 generatedUrls = await generateImageService(finalPrompt, aspectRatio, numImages);
-            } else {
-                 const response = await fetch(`https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`);
+            } else { // Pollinations model
+                const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
+                // We need to fetch and convert to base64 to store it like Gemini images for consistency
+                 const response = await fetch(imageUrl);
                  if (!response.ok) throw new Error("Network response was not ok from Pollinations.");
                  const blob = await response.blob();
                  generatedUrls = [await new Promise((resolve, reject) => {
@@ -1375,201 +1281,118 @@ const CreativeStudioView: React.FC<{
             
             setCurrentImages(generatedUrls);
             const newHistoryItem: ImageHistoryItem = {
-                id: Date.now().toString(), urls: generatedUrls, prompt: imagePrompt, enhancedPrompt: finalPrompt,
-                model: imageModel, style: style, aspectRatio: aspectRatio, timestamp: Date.now(),
+                id: Date.now().toString(),
+                urls: generatedUrls,
+                prompt: prompt,
+                enhancedPrompt: finalPrompt,
+                model: model,
+                style: style,
+                aspectRatio: aspectRatio,
+                timestamp: Date.now(),
             };
-            onImageGenerated(newHistoryItem);
-            setActiveTab('images');
+            onImagesGenerated(newHistoryItem);
 
         } catch (e) {
             console.error(e);
-            setImageError(t('error_image_generation_failed', imageModel === 'gemini' ? 'Gemini' : 'Nova gen 1'));
+            const modelName = model === 'gemini' ? 'Gemini' : 'Nova gen 1';
+            setError(t('error_image_generation_failed', modelName));
         } finally {
-            setIsImageLoading(false); setImageLoadingMessage('');
+            setIsLoading(false);
+            setLoadingMessage('');
         }
     };
     
-    const handleGenerateVideo = async () => {
-        if (!videoPrompt) { setVideoError(t('error_prompt_required')); return; }
-        if (!deductPoints(videoCost)) return;
-
-        setIsVideoLoading(true); setVideoError(''); setCurrentVideo(null);
-        
-        try {
-            let imageBytes: string | null = null;
-            if (videoImage.file) {
-                imageBytes = await fileToBase64(videoImage.file);
-            }
-            const videoUrl = await generateVideoService(videoPrompt, imageBytes, (message) => {
-                setVideoLoadingMessage(message);
-            });
-            setCurrentVideo(videoUrl);
-            const newHistoryItem: VideoHistoryItem = {
-                id: Date.now().toString(), url: videoUrl, prompt: videoPrompt, timestamp: Date.now()
-            };
-            onVideoGenerated(newHistoryItem);
-            setActiveTab('videos');
-        } catch(e) {
-            console.error(e);
-            setVideoError((e as Error).message || t('error_video_generation_failed'));
-        } finally {
-            setIsVideoLoading(false); setVideoLoadingMessage('');
-        }
-    }
-
-    const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file && file.type.startsWith('image/')) {
-            setVideoImage({ file, url: URL.createObjectURL(file) });
-        }
-    }
-
     const handleDownload = (url: string, filename: string) => {
         const link = document.createElement('a');
-        link.href = url; link.download = filename;
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
     
-    const handleCopy = (text: string) => navigator.clipboard.writeText(text);
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text);
+    };
 
     return (
         <div className="flex flex-col md:flex-row h-full w-full overflow-hidden">
             {/* Controls Panel */}
             <div className="w-full md:w-96 p-4 md:p-6 bg-[rgba(10,10,26,0.8)] border-l border-purple-500/20 shrink-0 overflow-y-auto">
-                <h1 className="text-2xl font-bold mb-6">{t('creative_studio')}</h1>
-                <div className="flex justify-center gap-2 p-1 bg-[rgba(30,30,60,0.8)] rounded-full mb-6">
-                    <button onClick={() => setMode('image')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${mode === 'image' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}><ImageIcon /> {t('image_generation')}</button>
-                    <button onClick={() => setMode('video')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${mode === 'video' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}><VideoIcon /> {t('video_generation')}</button>
-                </div>
-                
-                 {/* Image Generation Form */}
-                 {mode === 'image' && (
-                     <div className="bg-[#0a0a1a] p-4 rounded-xl border border-purple-500/20 space-y-4 animate-fade-in">
-                         <div className="flex justify-center gap-2 p-1 bg-[rgba(30,30,60,0.8)] rounded-full">
-                            <button onClick={() => setImageModel('gemini')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${imageModel === 'gemini' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Gemini (Imagen 3)</button>
-                            <button onClick={() => setImageModel('pollinations')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${imageModel === 'pollinations' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Nova gen 1</button>
+                <h1 className="text-2xl font-bold mb-6">{t('image_studio')}</h1>
+                 <div className="bg-[#0a0a1a] p-4 rounded-xl border border-purple-500/20 space-y-4">
+                     <div className="flex justify-center gap-2 p-1 bg-[rgba(30,30,60,0.8)] rounded-full">
+                        <button onClick={() => setModel('gemini')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${model === 'gemini' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Gemini (Imagen 3)</button>
+                        <button onClick={() => setModel('pollinations')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${model === 'pollinations' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Nova gen 1</button>
+                    </div>
+                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={t('image_prompt_placeholder')} className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isLoading}/>
+                    <div className="grid grid-cols-1 gap-4">
+                        <div>
+                            <label className="block text-sm font-bold mb-2 text-gray-400">{t('style')}</label>
+                            <select value={style} onChange={e => setStyle(e.target.value)} className="w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isLoading}>
+                                {imageStyles.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                            </select>
                         </div>
-                        <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)} placeholder={t('image_prompt_placeholder')} className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isImageLoading}/>
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-bold mb-2 text-gray-400">{t('style')}</label>
-                                <select value={style} onChange={e => setStyle(e.target.value)} className="w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isImageLoading}>
-                                    {imageStyles.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                <label className="block text-sm font-bold mb-2 text-gray-400">{t('aspect_ratio')}</label>
+                                <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value as any)} className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${model !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isLoading || model !== 'gemini'}>
+                                    <option value="1:1">1:1</option>
+                                    <option value="16:9">16:9</option>
+                                    <option value="9:16">9:16</option>
+                                    <option value="4:3">4:3</option>
+                                    <option value="3:4">3:4</option>
                                 </select>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold mb-2 text-gray-400">{t('aspect_ratio')}</label>
-                                    <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value as any)} className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${imageModel !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isImageLoading || imageModel !== 'gemini'}>
-                                        <option value="1:1">1:1</option> <option value="16:9">16:9</option> <option value="9:16">9:16</option> <option value="4:3">4:3</option> <option value="3:4">3:4</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold mb-2 text-gray-400">{t('number_of_images')}</label>
-                                    <input type="number" value={numImages} onChange={e => setNumImages(Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))} min="1" max="4" className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${imageModel !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isImageLoading || imageModel !== 'gemini'} />
-                                </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-2 text-gray-400">{t('number_of_images')}</label>
+                                <input type="number" value={numImages} onChange={e => setNumImages(Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))} min="1" max="4" className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${model !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isLoading || model !== 'gemini'} />
                             </div>
                         </div>
-                        <button onClick={handleGenerateImage} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base disabled:bg-gray-500 disabled:shadow-none" disabled={isImageLoading || userPoints < imageCost}>
-                            {isImageLoading ? imageLoadingMessage : <> <ImageIcon /> {t('generate_images_cost', imageCost)}</>}
-                        </button>
-                        {imageModel === 'pollinations' && <p className="text-xs text-center text-gray-400">{t('pollinations_disclaimer')}</p>}
-                        {imageError && <p className="text-red-400 mt-2 text-center text-sm">{imageError}</p>}
                     </div>
-                 )}
-
-                 {/* Video Generation Form */}
-                 {mode === 'video' && (
-                     <div className="bg-[#0a0a1a] p-4 rounded-xl border border-purple-500/20 space-y-4 animate-fade-in">
-                        <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)} placeholder={t('video_prompt_placeholder')} className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isVideoLoading}/>
-                        
-                        <input type="file" accept="image/*" onChange={handleVideoFileChange} ref={videoFileInputRef} className="hidden" disabled={isVideoLoading} />
-                        <button onClick={() => videoFileInputRef.current?.click()} className="w-full p-3 rounded-lg border-dashed border-2 border-purple-500/50 bg-[rgba(30,30,60,0.8)] text-purple-300 hover:border-purple-500/80 hover:bg-purple-500/10 transition-colors disabled:opacity-50" disabled={isVideoLoading}>
-                            {videoImage.url ? t('change_initial_image') : t('upload_initial_image')}
-                        </button>
-                        
-                        {videoImage.url && (
-                             <div className="relative w-full aspect-video rounded-lg overflow-hidden">
-                                <img src={videoImage.url} alt="Initial image preview" className="w-full h-full object-cover"/>
-                                <button onClick={() => setVideoImage({file: null, url: null})} className="absolute top-1 right-1 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-500/80">&times;</button>
-                            </div>
-                        )}
-
-                        <button onClick={handleGenerateVideo} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base disabled:bg-gray-500 disabled:shadow-none" disabled={isVideoLoading || userPoints < videoCost}>
-                            {isVideoLoading ? videoLoadingMessage : <> <VideoIcon /> {t('generate_video_cost', videoCost)}</>}
-                        </button>
-                         {videoError && <p className="text-red-400 mt-2 text-center text-sm">{videoError}</p>}
-                    </div>
-                 )}
+                    <button onClick={handleGenerate} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base" disabled={isLoading}>
+                        {isLoading ? loadingMessage : <> <ImageIcon /> {t('generate_images')}</>}
+                    </button>
+                    {model === 'pollinations' && <p className="text-xs text-center text-gray-400">{t('pollinations_disclaimer')}</p>}
+                </div>
+                 {error && <p className="text-red-400 mt-4 text-center">{error}</p>}
             </div>
 
             {/* Gallery */}
-            <div className="flex-1 p-4 md:p-6 overflow-y-auto flex flex-col">
-                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold">{t('history')}</h2>
-                    <div className="flex justify-center gap-1 p-1 bg-[#0a0a1a] rounded-full border border-purple-500/20">
-                        <button onClick={() => setActiveTab('images')} className={`py-1 px-4 rounded-full text-sm font-semibold transition-colors ${activeTab === 'images' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-purple-800/50'}`}>{t('images')}</button>
-                        <button onClick={() => setActiveTab('videos')} className={`py-1 px-4 rounded-full text-sm font-semibold transition-colors ${activeTab === 'videos' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-purple-800/50'}`}>{t('videos')}</button>
-                    </div>
-                </div>
-                
-                 {/* Current Results */}
-                 {(isImageLoading || isVideoLoading || currentImages.length > 0 || currentVideo) && (
-                    <div className="mb-8">
-                        <h3 className="text-lg font-bold mb-3">{t('current_results')}</h3>
-                        {isImageLoading && !currentImages.length && <div className="flex items-center justify-center h-48"><div className="w-10 h-10 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>}
-                        {isVideoLoading && !currentVideo && <div className="flex items-center justify-center h-48"><div className="w-10 h-10 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>}
-                        
-                        {currentImages.length > 0 && (
-                            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {currentImages.map((img, index) => (
-                                    <div key={`current-img-${index}`} className="relative group/img bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20 aspect-square">
-                                        <img src={img} alt={`${t('generated_image')} ${index + 1}`} className="rounded-md w-full h-full object-cover" />
-                                        <button onClick={() => handleDownload(img, `nova-ai-img-${Date.now()}-${index}.png`)} className="absolute top-2 right-2 bg-black/50 text-white w-8 h-8 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center" title={t('download_image')}>
-                                            <DownloadIcon />
-                                        </button>
-                                    </div>
-                                ))}
+            <div className="flex-1 p-4 md:p-6 overflow-y-auto">
+                <h2 className="text-xl font-bold mb-4">{t('current_results')}</h2>
+                 {isLoading && !currentImages.length && (
+                    <div className="flex items-center justify-center h-48"><div className="w-16 h-16 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>
+                 )}
+                 {currentImages.length > 0 && (
+                     <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8`}>
+                        {currentImages.map((img, index) => (
+                            <div key={`current-${index}`} className="relative group/img bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20">
+                                <img src={img} alt={`${t('generated_image')} ${index + 1}`} className="rounded-md w-full h-auto" />
+                                 <button onClick={() => handleDownload(img, `nova-ai-${Date.now()}-${index}.png`)} className="absolute top-2 right-2 bg-black/50 text-white w-8 h-8 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center" title={t('download_image')}>
+                                    <DownloadIcon />
+                                 </button>
                             </div>
-                        )}
-
-                        {currentVideo && (
-                            <div className="relative group/vid bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20 max-w-md mx-auto">
-                                <video src={currentVideo} controls autoPlay loop className="rounded-md w-full h-auto" />
-                            </div>
-                        )}
+                        ))}
                     </div>
                  )}
                 
-                {/* History Gallery */}
-                {activeTab === 'images' && (
-                    <>
-                        {sortedImageHistory.length === 0 ? (
-                            <div className="flex-1 flex items-center justify-center text-gray-500">{t('no_images_generated')}</div>
-                        ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                {sortedImageHistory.flatMap(item =>
-                                     item.urls.map((url, index) => (
-                                         <ImageHistoryCard key={`${item.id}-${index}`} item={{...item, urls: [url]}} onDownload={handleDownload} onCopy={handleCopy} />
-                                     ))
-                                )}
-                            </div>
+                <h2 className="text-xl font-bold mb-4 border-t border-purple-500/20 pt-6">{t('history')}</h2>
+                {sortedHistory.length === 0 ? (
+                    <p className="text-gray-500 text-center mt-8">{t('no_images_generated')}</p>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                        {sortedHistory.flatMap(item =>
+                             item.urls.map((url, index) => (
+                                 <ImageHistoryCard
+                                     key={`${item.id}-${index}`}
+                                     item={{...item, urls: [url]}} // Pass single url to card
+                                     onDownload={handleDownload}
+                                     onCopy={handleCopy}
+                                 />
+                             ))
                         )}
-                    </>
-                )}
-                
-                {activeTab === 'videos' && (
-                     <>
-                        {sortedVideoHistory.length === 0 ? (
-                            <div className="flex-1 flex items-center justify-center text-gray-500">{t('no_videos_generated')}</div>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                                {sortedVideoHistory.map(item => (
-                                    <VideoHistoryCard key={item.id} item={item} onDownload={handleDownload} onCopy={handleCopy} />
-                                ))}
-                            </div>
-                        )}
-                    </>
+                    </div>
                 )}
             </div>
         </div>
@@ -1621,17 +1444,11 @@ const SettingsView: React.FC<{
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultInternetSearch} onChange={e => onUpdate({ ...settings, defaultInternetSearch: e.target.checked })} />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
-                        <div className="flex items-center gap-2">
-                            <span>{t('enable_deep_thinking')}</span>
-                            <span className="text-xs text-purple-400">({t('deep_thinking_cost_info')})</span>
-                        </div>
+                        <span>{t('enable_deep_thinking')}</span>
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultDeepThinking} onChange={e => onUpdate({ ...settings, defaultDeepThinking: e.target.checked })} />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
-                        <div className="flex items-center gap-2">
-                            <span>{t('enable_scientific_mode')}</span>
-                             <span className="text-xs text-purple-400">({t('scientific_mode_cost_info')})</span>
-                        </div>
+                        <span>{t('enable_scientific_mode')}</span>
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultScientificMode} onChange={e => onUpdate({ ...settings, defaultScientificMode: e.target.checked })} />
                     </label>
                 </div>
@@ -1817,7 +1634,7 @@ const ProfileView: React.FC<{
                      ) : (
                         savedMemories.map(mem => (
                             <div key={mem.id} className="relative group/memory">
-                                <MessageBubble message={mem} onSaveMemory={() => {}} onPreviewCode={() => {}} onUpdateMessageContent={()=>{}} onStudyFollowUp={() => {}} onPlayVideo={() => {}}/>
+                                <MessageBubble message={mem} onSaveMemory={() => {}} onPreviewCode={() => {}} onUpdateMessageContent={()=>{}} onStudyFollowUp={() => {}}/>
                                 <button onClick={() => onDeleteMemory(mem.id)} title={t('delete_memory')} className="absolute top-0 left-0 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center hover:scale-110 opacity-0 group-hover/memory:opacity-100 transition-opacity">
                                     <TrashIcon />
                                 </button>
@@ -1843,17 +1660,11 @@ const SettingsPopover: React.FC<{
                     <input type="checkbox" className="toggle-switch" checked={settings.useInternetSearch} onChange={e => onChange({...settings, useInternetSearch: e.target.checked})}/>
                 </label>
                 <label className="flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-2">
-                        <span className="font-semibold">{t('deep_thinking')}</span>
-                        <span className="text-xs text-purple-400">({t('deep_thinking_cost_info')})</span>
-                    </div>
+                    <span className="font-semibold">{t('deep_thinking')}</span>
                      <input type="checkbox" className="toggle-switch" checked={settings.useDeepThinking} onChange={e => onChange({...settings, useDeepThinking: e.target.checked})}/>
                 </label>
                  <label className="flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-2">
-                        <span className="font-semibold">{t('scientific_mode')}</span>
-                        <span className="text-xs text-purple-400">({t('scientific_mode_cost_info')})</span>
-                    </div>
+                    <span className="font-semibold">{t('scientific_mode')}</span>
                      <input type="checkbox" className="toggle-switch" checked={settings.useScientificMode} onChange={e => onChange({...settings, useScientificMode: e.target.checked})}/>
                 </label>
             </div>
@@ -2004,7 +1815,7 @@ const WelcomeScreen: React.FC<{ onPromptSelect: (prompt: string) => void }> = ({
     const { t } = useLanguage();
     const suggestions = [
         { title: t('welcome_suggestion1_title'), prompt: t('welcome_suggestion1_prompt')},
-        { title: t('welcome_suggestion_youtube_title'), prompt: t('welcome_suggestion_youtube_prompt')},
+        { title: t('welcome_suggestion2_title'), prompt: t('welcome_suggestion2_prompt')},
         { title: t('welcome_suggestion3_title'), prompt: t('welcome_suggestion3_prompt')},
         { title: t('welcome_suggestion4_title'), prompt: t('welcome_suggestion4_prompt')},
     ];
@@ -2025,7 +1836,8 @@ const WelcomeScreen: React.FC<{ onPromptSelect: (prompt: string) => void }> = ({
     );
 };
 
-interface MainChatInterfaceProps {
+
+const MainChatInterface: React.FC<{
     session: ChatSession;
     isLoading: boolean;
     onSettingsChange: (settings: ChatSettings) => void;
@@ -2033,13 +1845,10 @@ interface MainChatInterfaceProps {
     onPreviewCode: (code: string, language: string) => void;
     onAddKnowledgeFile: (file: File) => void;
     onDeleteKnowledgeFile: (index: number) => void;
-    onUpdateMessageContent: (messageId: string, newContent: RichContent | string) => void;
+    onUpdateMessageContent: (messageId: string, newContent: RichContent) => void;
     onToggleDrawer: () => void;
     onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void;
-    onPlayVideo: (videoId: string) => void;
-}
-
-const MainChatInterface: React.FC<MainChatInterfaceProps> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer, onStudyFollowUp, onPlayVideo }) => {
+}> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer, onStudyFollowUp }) => {
     const { t } = useLanguage();
     const [showSettings, setShowSettings] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -2096,18 +1905,16 @@ const MainChatInterface: React.FC<MainChatInterfaceProps> = ({ session, isLoadin
                     {showSettings && <SettingsPopover settings={session.settings} onChange={onSettingsChange} />}
                 </div>
             </header>
-            <div className="flex-1 h-[1px] overflow-y-auto p-0 md:p-4">
-                <div className="mx-auto max-w-4xl flex flex-col gap-6 p-2 md:p-0">
-                    {session.messages.map(msg => <MessageBubble key={msg.id} message={msg} onSaveMemory={onSaveMemory} onPreviewCode={onPreviewCode} onUpdateMessageContent={onUpdateMessageContent} onStudyFollowUp={onStudyFollowUp} onPlayVideo={onPlayVideo}/>)}
-                    {isLoading && (
-                        <div className="self-start flex items-center gap-2 p-4">
-                            <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-0"></div>
-                            <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-200"></div>
-                            <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-400"></div>
-                        </div>
-                    )}
-                    <div ref={chatEndRef}></div>
-                </div>
+            <div className="flex-1 h-[1px] p-2 md:p-6 overflow-y-auto flex flex-col gap-6">
+                {session.messages.map(msg => <MessageBubble key={msg.id} message={msg} onSaveMemory={onSaveMemory} onPreviewCode={onPreviewCode} onUpdateMessageContent={onUpdateMessageContent} onStudyFollowUp={onStudyFollowUp} />)}
+                {isLoading && (
+                    <div className="self-start flex items-center gap-2 p-4">
+                        <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-0"></div>
+                        <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-200"></div>
+                        <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-400"></div>
+                    </div>
+                )}
+                <div ref={chatEndRef}></div>
             </div>
         </>
     );
@@ -2180,7 +1987,7 @@ const ChatInputBar: React.FC<{
     )
 }
 
-interface ChatViewProps {
+const ChatView: React.FC<{ 
     globalSettings: GlobalSettings;
     userProfile: Record<string, any>;
     generalMemories: string[];
@@ -2188,7 +1995,7 @@ interface ChatViewProps {
     customTools: CustomTool[];
     onUpdateUserProfile: (profile: Record<string, any>) => void;
     onSaveMemory: (message: Message) => void;
-    onImageGenerated: (item: ImageHistoryItem) => void;
+    onImagesGenerated: (item: ImageHistoryItem) => void;
     sessions: Record<string, ChatSession>;
     setSessions: React.Dispatch<React.SetStateAction<Record<string, ChatSession>>>;
     activeId: string | null;
@@ -2198,20 +2005,16 @@ interface ChatViewProps {
     temporarySession: ChatSession | null;
     setTemporarySession: React.Dispatch<React.SetStateAction<ChatSession | null>>;
     onToggleDrawer: () => void;
-    deductPoints: (amount: number) => boolean;
-}
-
-const ChatView: React.FC<ChatViewProps> = ({ 
-    globalSettings, userProfile, generalMemories, savedMemories, customTools, onUpdateUserProfile, onSaveMemory, onImageGenerated,
+}> = ({ 
+    globalSettings, userProfile, generalMemories, savedMemories, customTools, onUpdateUserProfile, onSaveMemory, onImagesGenerated,
     sessions, setSessions, activeId, setActiveId, createNewSession, createTempSession,
-    temporarySession, setTemporarySession, onToggleDrawer, deductPoints
+    temporarySession, setTemporarySession, onToggleDrawer
 }) => {
     const { language, t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState>({ isOpen: false, isCollapsed: false, name: '', type: 'unsupported', content: null });
     const [codePreview, setCodePreview] = useState({ isOpen: false, code: '', language: '' });
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-    const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
 
     const handleFileUpload = async (file: File) => {
         setFilePreview({ isOpen: true, isCollapsed: false, name: file.name, type: 'loading', content: null });
@@ -2269,118 +2072,56 @@ const ChatView: React.FC<ChatViewProps> = ({
             createNewSession();
         }
     };
-
-    const handlePlayVideo = (videoId: string) => {
-        setPlayingVideoId(videoId);
-    };
-
-    const handleCloseVideo = () => {
-        setPlayingVideoId(null);
-    };
     
     const isTempChat = activeId === 'temp-chat';
 
     const handleSendMessage = async (prompt: string, targetSessionId?: string) => {
         const sessionId = targetSessionId || activeId;
-        if (!sessionId || isLoading) return;
+        if (!sessionId) return;
+        if (isLoading) return;
 
         let activeSession = isTempChat ? temporarySession : sessions[sessionId];
         if (!activeSession) return;
         
-        const lowerPrompt = prompt.trim().toLowerCase();
-        let cost = 0;
-        let isCommand = false;
-        
-        // --- Calculate Cost ---
-        if (lowerPrompt.startsWith('/image ')) {
-            isCommand = true;
-            cost = 20;
-        } else if (lowerPrompt.startsWith('/youtube ')) {
-            isCommand = true;
-            cost = 25;
-        } else if (lowerPrompt.startsWith('/resume')) {
-            isCommand = true;
-            cost = 100;
-        } else if (lowerPrompt.startsWith('/report')) {
-            isCommand = true;
-            cost = 75;
-        } else if (lowerPrompt.startsWith('/project')) {
-            isCommand = true;
-            cost = 150;
-        } else if (lowerPrompt.startsWith('/chart') || lowerPrompt.startsWith('/table')) {
-            isCommand = true;
-            cost = 30;
-        }
+        // --- Image Generation Command ---
+        if (prompt.trim().toLowerCase().startsWith('/image ')) {
+            const imagePrompt = prompt.replace(/\/image\s+/i, '').trim();
+            if (!imagePrompt) return;
 
-        // If not a command, check for settings for per-message cost
-        if (!isCommand) {
-            if (activeSession.settings.useDeepThinking) cost += 5;
-            if (activeSession.settings.useScientificMode) cost += 10;
-        }
+            const userMessage: Message = { id: Date.now().toString(), role: 'user', content: prompt };
+            const updatedMessages = [...activeSession.messages, userMessage];
+            const updatedSession = { ...activeSession, messages: updatedMessages };
 
-        // --- Deduct Points ---
-        if (cost > 0 && !deductPoints(cost)) {
-            return; // Stop if not enough points
-        }
-        
-        // --- Add User Message to UI ---
-        const userMessageParts: Part[] = [];
-        let userMessageUI: Partial<Message> = { content: prompt };
+            if (isTempChat) setTemporarySession(updatedSession);
+            else setSessions(s => ({ ...s, [sessionId]: updatedSession }));
 
-        let fullPromptForApi = prompt;
-        if (filePreview.isOpen && (filePreview.type === 'text' || filePreview.type === 'table')) {
-            let fileContext = filePreview.type === 'text' 
-                ? (filePreview.content as string)
-                : (filePreview.content as string[][]).map(row => row.join(',')).join('\n');
-            fullPromptForApi = t('prompt_with_file_context', fileContext, prompt);
-            userMessageUI.filePreview = { name: filePreview.name, type: filePreview.type };
-        }
-        userMessageParts.push({ text: fullPromptForApi });
+            setIsLoading(true);
+            const aiResponseId = (Date.now() + 1).toString();
+            const aiPlaceholder: Message = { id: aiResponseId, role: 'model', content: t('generating_image_for', imagePrompt) };
+            
+            if (isTempChat) setTemporarySession(s => s ? { ...s, messages: [...s.messages, aiPlaceholder] } : null);
+            else setSessions(s => ({ ...s, [sessionId]: { ...s[sessionId], messages: [...s[sessionId].messages, aiPlaceholder] } }));
 
-        if (uploadedFile && uploadedFile.type.startsWith('image/')) {
-            const base64Data = await fileToBase64(uploadedFile);
-            userMessageParts.push({ inlineData: { mimeType: uploadedFile.type, data: base64Data } });
-            userMessageUI.images = [filePreview.url!];
-        }
-
-        const userMessage: Message = { id: Date.now().toString(), role: 'user', ...userMessageUI, content: prompt };
-        
-        closeFilePreview();
-
-        const isNewChat = activeSession.messages.length <= 1;
-        const newTitle = isNewChat ? (activeSession.toolId ? customTools.find(t=>t.id === activeSession.toolId)?.name : prompt.substring(0, 30) + '...') : activeSession.title;
-        const updatedSessionWithUserMessage = { ...activeSession, messages: [...activeSession.messages, userMessage], title: newTitle || activeSession.title };
-        
-        if (isTempChat) {
-            setTemporarySession(updatedSessionWithUserMessage);
-        } else {
-            setSessions(s => ({ ...s, [sessionId]: updatedSessionWithUserMessage }));
-        }
-
-        setIsLoading(true);
-
-        // --- Add AI Placeholder & Call API ---
-        const aiResponseId = (Date.now() + 1).toString();
-        const aiMessagePlaceholder: Message = { id: aiResponseId, role: 'model', content: '...' };
-        
-        if (isTempChat) {
-            setTemporarySession(s => s ? { ...s, messages: [...s.messages, aiMessagePlaceholder] } : null);
-        } else {
-            setSessions(s => ({ ...s, [sessionId]: { ...s[sessionId], messages: [...s[sessionId].messages, aiMessagePlaceholder] } }));
-        }
-        
-        // --- Special Handling for /image command ---
-        if (lowerPrompt.startsWith('/image ')) {
-             try {
-                const imagePrompt = prompt.replace(/\/image\s+/i, '').trim();
+            try {
                 const enhancedPrompt = await enhancePromptForImage(imagePrompt, 'cinematic');
                 const generatedUrls = await generateImageService(enhancedPrompt, '1:1', 1);
 
-                const newHistoryItem: ImageHistoryItem = { id: Date.now().toString(), urls: generatedUrls, prompt: imagePrompt, enhancedPrompt, model: 'gemini', style: 'cinematic', aspectRatio: '1:1', timestamp: Date.now() };
-                onImageGenerated(newHistoryItem);
+                const newHistoryItem: ImageHistoryItem = {
+                    id: Date.now().toString(),
+                    urls: generatedUrls,
+                    prompt: imagePrompt,
+                    enhancedPrompt: enhancedPrompt,
+                    model: 'gemini',
+                    style: 'cinematic',
+                    aspectRatio: '1:1',
+                    timestamp: Date.now()
+                };
+                onImagesGenerated(newHistoryItem);
 
                 const aiFinalMessage: Message = { id: aiResponseId, role: 'model', content: t('image_generated_for', imagePrompt), images: generatedUrls };
+                
                 const updater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? aiFinalMessage : m) } : null;
+
                 if (isTempChat) setTemporarySession(updater);
                 else setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
 
@@ -2395,15 +2136,70 @@ const ChatView: React.FC<ChatViewProps> = ({
             return;
         }
 
-        // --- Regular Chat and other Commands ---
-        const history = updatedSessionWithUserMessage.messages;
+
+        // --- Regular Chat Message ---
+        const userMessageParts: Part[] = [];
+        let userMessageUI: Partial<Message> = { content: prompt };
+
+        let fullPrompt = prompt;
+        if (filePreview.isOpen && (filePreview.type === 'text' || filePreview.type === 'table')) {
+            let fileContext = filePreview.type === 'text' 
+                ? (filePreview.content as string)
+                : (filePreview.content as string[][]).map(row => row.join(',')).join('\n');
+            fullPrompt = t('prompt_with_file_context', fileContext, prompt);
+            userMessageUI.filePreview = { name: filePreview.name, type: filePreview.type };
+        }
+        userMessageParts.push({ text: fullPrompt });
+
+        if (uploadedFile && uploadedFile.type.startsWith('image/')) {
+            const base64Data = await fileToBase64(uploadedFile);
+            userMessageParts.push({ inlineData: { mimeType: uploadedFile.type, data: base64Data } });
+            userMessageUI.images = [filePreview.url!];
+        }
+
+        const userMessage: Message = { id: Date.now().toString(), role: 'user', ...userMessageUI, content: prompt };
+        
+        closeFilePreview();
+
+        const isNewChat = activeSession.messages.length <= 1;
+
+        const updatedMessages = [...activeSession.messages, userMessage];
+        const newTitle = isNewChat ? (activeSession.toolId ? customTools.find(t=>t.id === activeSession.toolId)?.name : prompt.substring(0, 30) + '...') : activeSession.title;
+        const updatedSession = { ...activeSession, messages: updatedMessages, title: newTitle || activeSession.title };
+        
+        if (isTempChat) {
+            setTemporarySession(updatedSession);
+        } else {
+            setSessions(s => ({ ...s, [sessionId]: updatedSession }));
+        }
+
+        setIsLoading(true);
+
+        const aiResponseId = (Date.now() + 1).toString();
+        const aiMessagePlaceholder: Message = { id: aiResponseId, role: 'model', content: '...' };
+        
+        if (isTempChat) {
+            setTemporarySession(s => s ? { ...s, messages: [...s.messages, aiMessagePlaceholder] } : null);
+        } else {
+            setSessions(s => ({ ...s, [sessionId]: { ...s[sessionId], messages: [...s[sessionId].messages, aiMessagePlaceholder] } }));
+        }
+        
+        const history = updatedMessages;
         const activeTool = customTools.find(t => t.id === activeSession?.toolId);
         
         let fullResponse = '';
         try {
              const stream = await getAiResponseStream(
-                userMessageParts, history, activeSession.settings, userProfile, generalMemories, 
-                activeTool, sessions, savedMemories, activeSession.knowledgeFiles || [], language
+                userMessageParts, 
+                history, 
+                activeSession.settings, 
+                userProfile, 
+                generalMemories, 
+                activeTool,
+                sessions,
+                savedMemories,
+                activeSession.knowledgeFiles || [],
+                language
             );
 
             let sources: any[] = [];
@@ -2411,37 +2207,72 @@ const ChatView: React.FC<ChatViewProps> = ({
                 fullResponse += chunk.text;
                 if (chunk.sources) sources = chunk.sources;
 
-                const updater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? { ...m, content: fullResponse, sources } : m) } : null;
+                const updater = (s: ChatSession | null) => {
+                    if (!s) return null;
+                    const currentMessages = s.messages;
+                    const updatedMessages = currentMessages.map(m => m.id === aiResponseId ? { ...m, content: fullResponse, sources } : m);
+                    return { ...s, messages: updatedMessages };
+                };
 
-                if (isTempChat) setTemporarySession(updater);
-                else setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
+                if (isTempChat) {
+                    setTemporarySession(updater);
+                } else {
+                    setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
+                }
             }
             
             let finalContent: string | RichContent = fullResponse;
             try {
+                // To prevent parsing malformed JSON during streaming, we parse only at the end.
                 const potentialJson = fullResponse.substring(fullResponse.indexOf('{'), fullResponse.lastIndexOf('}') + 1);
                 const parsed = JSON.parse(potentialJson);
-                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project', 'study_explanation', 'study_review', 'study_quiz', 'youtube_search_results'].includes(parsed.type)) {
-                    finalContent = (parsed.type === 'resume') ? { ...parsed, template: 'elegant' } : parsed;
+                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project', 'study_explanation', 'study_review', 'study_quiz'].includes(parsed.type)) {
+                    if (parsed.type === 'resume') {
+                         finalContent = { ...parsed, template: 'elegant' }; // Set default template for new resumes
+                    } else {
+                         finalContent = parsed;
+                    }
                 }
-            } catch (e) { /* Not JSON, treat as text */ }
+            } catch (e) { /* Not a JSON, treat as text */ }
             
-            const finalUpdater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? { ...m, content: finalContent, sources } : m) } : null;
-            if (isTempChat) setTemporarySession(finalUpdater);
-            else setSessions(s => ({ ...s, [sessionId]: finalUpdater(s[sessionId])! }));
+            const finalUpdater = (s: ChatSession | null) => {
+                 if (!s) return null;
+                const currentMessages = s.messages;
+                const updatedMessages = currentMessages.map(m => m.id === aiResponseId ? { ...m, content: finalContent, sources } : m);
+                return { ...s, messages: updatedMessages };
+            }
+
+            if (isTempChat) {
+                setTemporarySession(finalUpdater);
+            } else {
+                setSessions(s => ({ ...s, [sessionId]: finalUpdater(s[sessionId])! }));
+            }
+
 
         } catch (error) {
             console.error("Error generating response:", error);
             const errorMessage: Message = { id: aiResponseId, role: 'model', content: t('error_general_response') };
-            const errorUpdater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? errorMessage : m) } : null;
-            if (isTempChat) setTemporarySession(errorUpdater);
-            else setSessions(s => ({ ...s, [sessionId]: errorUpdater(s[sessionId])! }));
+            
+            const errorUpdater = (s: ChatSession | null) => {
+                if (!s) return null;
+                const currentMessages = s.messages;
+                const updatedMessages = currentMessages.map(m => m.id === aiResponseId ? errorMessage : m);
+                return { ...s, messages: updatedMessages };
+            }
+
+            if (isTempChat) {
+                setTemporarySession(errorUpdater);
+            } else {
+                setSessions(s => ({ ...s, [sessionId]: errorUpdater(s[sessionId])! }));
+            }
+
         } finally {
             setIsLoading(false);
             if (!activeTool && fullResponse && typeof fullResponse === 'string') {
                 const info = await extractUserInfo(prompt, fullResponse);
                  if (Object.values(info).some(v => (Array.isArray(v) ? v.length > 0 : !!v))) {
-                    onUpdateUserProfile(info);
+                    const newProfile = { ...userProfile, ...info };
+                    onUpdateUserProfile(newProfile);
                 }
             }
         }
@@ -2468,6 +2299,7 @@ const ChatView: React.FC<ChatViewProps> = ({
             } else if (file.type.startsWith('text/')) {
                 content = await parseTextFile(file);
             } else {
+                // Or show an error to the user
                 console.warn("Unsupported file type for knowledge base");
                 return;
             }
@@ -2493,8 +2325,9 @@ const ChatView: React.FC<ChatViewProps> = ({
         }
     }
     
-    const handleUpdateMessageContent = (messageId: string, newContent: RichContent | string) => {
+    const handleUpdateMessageContent = (messageId: string, newContent: RichContent) => {
         if (!activeId) return;
+
         const updater = (session: ChatSession | null) => {
             if (!session) return null;
             const updatedMessages = session.messages.map(msg => 
@@ -2521,7 +2354,6 @@ const ChatView: React.FC<ChatViewProps> = ({
 
     return (
         <div className="flex flex-1 h-full overflow-hidden">
-             <YouTubePlayerModal videoId={playingVideoId} onClose={handleCloseVideo} />
              <CodePreviewPanel isOpen={codePreview.isOpen} code={codePreview.code} onClose={handleCloseCodePreview} />
              <FilePreviewPanel preview={filePreview} onClose={closeFilePreview} />
             <div className="flex-1 flex flex-col relative overflow-hidden">
@@ -2542,7 +2374,6 @@ const ChatView: React.FC<ChatViewProps> = ({
                         onUpdateMessageContent={handleUpdateMessageContent}
                         onToggleDrawer={onToggleDrawer}
                         onStudyFollowUp={handleStudyFollowUp}
-                        onPlayVideo={handlePlayVideo}
                     />
                  )}
                  <ChatInputBar 
@@ -2585,48 +2416,6 @@ const Modal: React.FC<{ children: React.ReactNode, title: string, onClose: () =>
     );
 };
 
-const YouTubePlayerModal: React.FC<{ videoId: string | null; onClose: () => void; }> = ({ videoId, onClose }) => {
-    const { t } = useLanguage();
-    const [embedUrl, setEmbedUrl] = useState('');
-
-    useEffect(() => {
-        if (videoId) {
-            // Construct the URL on the client-side to safely access window.location
-            const origin = window.location.origin;
-            const url = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&origin=${encodeURIComponent(origin)}`;
-            setEmbedUrl(url);
-        } else {
-            setEmbedUrl(''); // Clear URL when modal closes
-        }
-    }, [videoId]);
-
-    if (!videoId) return null;
-
-    return (
-        <div className="fixed inset-0 bg-black/80 z-[110] flex items-center justify-center p-0 md:p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
-            <div className="bg-black w-full h-auto md:h-full max-h-[85vh] max-w-4xl aspect-video relative shadow-2xl shadow-purple-500/20" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute -top-3 -right-3 md:-top-4 md:-right-4 text-white bg-purple-600 rounded-full w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-xl z-20 hover:bg-purple-500 transition-colors" title={t('close')}>
-                    <CloseIcon />
-                </button>
-                 {embedUrl ? (
-                     <iframe
-                        className="w-full h-full"
-                        src={embedUrl}
-                        title="YouTube video player"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                    ></iframe>
-                 ) : (
-                    <div className="flex items-center justify-center h-full">
-                        <div className="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                 )}
-            </div>
-        </div>
-    );
-};
-
 const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const { t } = useLanguage();
     const [currentView, setCurrentView] = useState<View>(View.CHAT);
@@ -2638,7 +2427,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [savedMemories, setSavedMemories] = useState<Message[]>([]);
     const [generalMemories, setGeneralMemories] = useState<string[]>([]);
     const [imageHistory, setImageHistory] = useState<ImageHistoryItem[]>([]);
-    const [videoHistory, setVideoHistory] = useState<VideoHistoryItem[]>([]);
     
     const [sessions, setSessions] = useState<Record<string, ChatSession>>({});
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -2646,85 +2434,61 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [temporarySession, setTemporarySession] = useState<ChatSession | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     
-    const [userPoints, setUserPoints] = useState(300);
-
-    // Load data and manage points on mount
+    // Load data from local storage on mount
     useEffect(() => {
-        // Points Management
-        const savedPointsStr = localStorage.getItem('nova-user-points');
-        const savedResetTimeStr = localStorage.getItem('nova-points-reset-time');
-        const now = Date.now();
-        let needsReset = true;
+        const loadData = () => {
+            try {
+                const savedSettings = localStorage.getItem('nova-global-settings');
+                if (savedSettings) setGlobalSettings(JSON.parse(savedSettings));
 
-        if (savedResetTimeStr) {
-            const lastReset = parseInt(savedResetTimeStr, 10);
-            const startOfToday = new Date();
-            startOfToday.setHours(0, 0, 0, 0);
-            
-            if (lastReset >= startOfToday.getTime()) {
-                needsReset = false;
-            }
-        }
-
-        if (needsReset) {
-            const startOfToday = new Date();
-            startOfToday.setHours(0, 0, 0, 0);
-            setUserPoints(300);
-            localStorage.setItem('nova-user-points', '300');
-            localStorage.setItem('nova-points-reset-time', startOfToday.getTime().toString());
-        } else {
-            setUserPoints(savedPointsStr ? parseInt(savedPointsStr, 10) : 300);
-        }
-
-        // Load other data from storage
-        try {
-            const savedSettings = localStorage.getItem('nova-global-settings');
-            if (savedSettings) setGlobalSettings(JSON.parse(savedSettings));
-
-            const savedTools = localStorage.getItem('nova-custom-tools');
-            if (savedTools) {
-                setCustomTools(JSON.parse(savedTools));
-            } else {
-                const defaultTool: CustomTool = { id: 'default-study-buddy', name: t('study_buddy_tool_name'), icon: '🎓', prompt: t('study_buddy_tool_prompt') };
-                setCustomTools([defaultTool]);
-                localStorage.setItem('nova-custom-tools', JSON.stringify([defaultTool]));
-            }
-
-            const savedProfile = localStorage.getItem('nova-user-profile');
-            if (savedProfile) setUserProfile(JSON.parse(savedProfile));
-            const savedMems = localStorage.getItem('nova-saved-memories');
-            if (savedMems) setSavedMemories(JSON.parse(savedMems));
-            const savedGeneralMems = localStorage.getItem('nova-general-memories');
-            if (savedGeneralMems) setGeneralMemories(JSON.parse(savedGeneralMems));
-            const savedSessions = localStorage.getItem('nova-chat-sessions');
-            const savedActiveId = localStorage.getItem('nova-active-chat-id');
-            if (savedSessions) {
-                const parsedSessions = JSON.parse(savedSessions);
-                if (Object.keys(parsedSessions).length > 0) {
-                    setSessions(parsedSessions);
-                    if (savedActiveId && parsedSessions[savedActiveId]) setActiveId(savedActiveId);
-                    else setActiveId(Object.keys(parsedSessions).sort((a, b) => b.localeCompare(a))[0]);
+                const savedTools = localStorage.getItem('nova-custom-tools');
+                if (savedTools) {
+                    setCustomTools(JSON.parse(savedTools));
+                } else {
+                    // Create a default tool if none exist
+                    const defaultTool: CustomTool = {
+                        id: 'default-study-buddy',
+                        name: t('study_buddy_tool_name'),
+                        icon: '🎓',
+                        prompt: t('study_buddy_tool_prompt'),
+                    };
+                    setCustomTools([defaultTool]);
+                    localStorage.setItem('nova-custom-tools', JSON.stringify([defaultTool]));
                 }
-            }
-            const savedImageHistory = localStorage.getItem('nova-image-history');
-            if (savedImageHistory) setImageHistory(JSON.parse(savedImageHistory));
-            const savedVideoHistory = localStorage.getItem('nova-video-history');
-            if (savedVideoHistory) setVideoHistory(JSON.parse(savedVideoHistory));
-        } catch (e) {
-            console.error("Failed to load data from storage", e);
-        }
-    }, [t]);
 
-    const deductPoints = (amount: number): boolean => {
-        if (userPoints >= amount) {
-            const newPoints = userPoints - amount;
-            setUserPoints(newPoints);
-            localStorage.setItem('nova-user-points', newPoints.toString());
-            return true;
-        }
-        alert(t('not_enough_points'));
-        return false;
-    };
+                const savedProfile = localStorage.getItem('nova-user-profile');
+                if (savedProfile) setUserProfile(JSON.parse(savedProfile));
+
+                const savedMems = localStorage.getItem('nova-saved-memories');
+                if (savedMems) setSavedMemories(JSON.parse(savedMems));
+
+                const savedGeneralMems = localStorage.getItem('nova-general-memories');
+                if (savedGeneralMems) setGeneralMemories(JSON.parse(savedGeneralMems));
+                
+                const savedSessions = localStorage.getItem('nova-chat-sessions');
+                const savedActiveId = localStorage.getItem('nova-active-chat-id');
+                if (savedSessions) {
+                    const parsedSessions = JSON.parse(savedSessions);
+                    if (Object.keys(parsedSessions).length > 0) {
+                        setSessions(parsedSessions);
+                        if (savedActiveId && parsedSessions[savedActiveId]) {
+                            setActiveId(savedActiveId);
+                        } else {
+                           const latestSessionId = Object.keys(parsedSessions).sort((a,b) => b.localeCompare(a))[0];
+                           setActiveId(latestSessionId);
+                        }
+                    }
+                }
+                
+                const savedImageHistory = localStorage.getItem('nova-image-history');
+                if(savedImageHistory) setImageHistory(JSON.parse(savedImageHistory));
+
+            } catch (e) {
+                console.error("Failed to load data from storage", e);
+            }
+        };
+        loadData();
+    }, [t]);
 
     // Save chat sessions to local storage
     useEffect(() => {
@@ -2752,15 +2516,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             console.error("Failed to save image history to storage", e);
         }
     }, [imageHistory]);
-    
-    // Save video history to local storage
-    useEffect(() => {
-        try {
-            localStorage.setItem('nova-video-history', JSON.stringify(videoHistory));
-        } catch(e) {
-            console.error("Failed to save video history to storage", e);
-        }
-    }, [videoHistory]);
 
     // Handlers to update state and local storage
     const handleUpdateSettings = (newSettings: GlobalSettings) => {
@@ -2796,12 +2551,8 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         localStorage.setItem('nova-general-memories', JSON.stringify(memories));
     };
     
-    const handleImageGenerated = (item: ImageHistoryItem) => {
+    const handleImagesGenerated = (item: ImageHistoryItem) => {
         setImageHistory(prev => [item, ...prev]);
-    };
-    
-    const handleVideoGenerated = (item: VideoHistoryItem) => {
-        setVideoHistory(prev => [item, ...prev]);
     };
 
     const handleDeleteSession = (id: string) => {
@@ -2883,7 +2634,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         customTools={customTools}
                         onUpdateUserProfile={handleUpdateProfile}
                         onSaveMemory={handleSaveMemory}
-                        onImageGenerated={handleImageGenerated}
+                        onImagesGenerated={handleImagesGenerated}
                         sessions={sessions}
                         setSessions={setSessions}
                         activeId={activeId}
@@ -2893,18 +2644,13 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         temporarySession={temporarySession}
                         setTemporarySession={setTemporarySession}
                         onToggleDrawer={() => setIsDrawerOpen(p => !p)}
-                        deductPoints={deductPoints}
                     />
                  );
-            case View.CREATIVE_STUDIO:
+            case View.IMAGE_STUDIO:
                 return (
-                    <CreativeStudioView 
+                    <ImageStudioView 
                         imageHistory={imageHistory}
-                        videoHistory={videoHistory}
-                        onImageGenerated={handleImageGenerated}
-                        onVideoGenerated={handleVideoGenerated}
-                        userPoints={userPoints}
-                        deductPoints={deductPoints}
+                        onImagesGenerated={handleImagesGenerated}
                     />
                 );
             default:
@@ -2918,7 +2664,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         customTools={customTools}
                         onUpdateUserProfile={handleUpdateProfile}
                         onSaveMemory={handleSaveMemory}
-                        onImageGenerated={handleImageGenerated}
+                        onImagesGenerated={handleImagesGenerated}
                         sessions={sessions}
                         setSessions={setSessions}
                         activeId={activeId}
@@ -2928,7 +2674,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         temporarySession={temporarySession}
                         setTemporarySession={setTemporarySession}
                         onToggleDrawer={() => setIsDrawerOpen(p => !p)}
-                        deductPoints={deductPoints}
                     />
                 );
         }
@@ -2984,7 +2729,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                 onLogout={onLogout}
                 isDrawerOpen={isDrawerOpen}
                 onCloseDrawer={() => setIsDrawerOpen(false)}
-                userPoints={userPoints}
             />
         </div>
     );
@@ -3067,85 +2811,52 @@ const Hero: React.FC<{ onCTAClick: () => void }> = ({ onCTAClick }) => {
     );
 };
 
-const CapabilitiesSection: React.FC = () => {
+const DetailedFeatures: React.FC = () => {
     const { t } = useLanguage();
-    const [activeTab, setActiveTab] = useState('analysis');
-
-    const featureCategories: { [key: string]: { title: string, icon: JSX.Element, features: {icon: JSX.Element, title: string, description: string}[] } } = {
-        analysis: {
-            title: t('capabilities_tab_analysis'),
-            icon: <i className="fas fa-chart-line mr-2"></i>,
-            features: [
-                { icon: <i className="fas fa-file-import"></i>, title: t('cap_analysis_f1_title'), description: t('cap_analysis_f1_desc') },
-                { icon: <i className="fas fa-id-card"></i>, title: t('cap_analysis_f2_title'), description: t('cap_analysis_f2_desc') },
-                { icon: <i className="fas fa-chart-pie"></i>, title: t('cap_analysis_f3_title'), description: t('cap_analysis_f3_desc') },
-                { icon: <i className="fas fa-graduation-cap"></i>, title: t('cap_analysis_f4_title'), description: t('cap_analysis_f4_desc') },
-            ]
-        },
-        creative: {
-            title: t('capabilities_tab_creative'),
-            icon: <i className="fas fa-palette mr-2"></i>,
-            features: [
-                { icon: <i className="fas fa-image"></i>, title: t('cap_creative_f1_title'), description: t('cap_creative_f1_desc') },
-                { icon: <i className="fas fa-magic"></i>, title: t('cap_creative_f2_title'), description: t('cap_creative_f2_desc') },
-                { icon: <i className="fas fa-comments"></i>, title: t('cap_creative_f3_title'), description: t('cap_creative_f3_desc') },
-            ]
-        },
-        coding: {
-            title: t('capabilities_tab_coding'),
-            icon: <i className="fas fa-code mr-2"></i>,
-            features: [
-                { icon: <i className="fas fa-cogs"></i>, title: t('cap_coding_f1_title'), description: t('cap_coding_f1_desc') },
-                { icon: <i className="fas fa-file-code"></i>, title: t('cap_coding_f2_title'), description: t('cap_coding_f2_desc') },
-                { icon: <i className="fas fa-eye"></i>, title: t('cap_coding_f3_title'), description: t('cap_coding_f3_desc') },
-            ]
-        },
-        advanced: {
-            title: t('capabilities_tab_advanced'),
-            icon: <i className="fas fa-star mr-2"></i>,
-            features: [
-                { icon: <i className="fas fa-search"></i>, title: t('cap_advanced_f1_title'), description: t('cap_advanced_f1_desc') },
-                { icon: <i className="fab fa-youtube"></i>, title: t('cap_advanced_f4_title'), description: t('cap_advanced_f4_desc') },
-                { icon: <i className="fas fa-brain"></i>, title: t('cap_advanced_f2_title'), description: t('cap_advanced_f2_desc') },
-                { icon: <i className="fas fa-tools"></i>, title: t('cap_advanced_f3_title'), description: t('cap_advanced_f3_desc') },
-            ]
-        },
+    const featureGroups = {
+        [t('features_group1_title')]: [
+            { icon: <i className="fas fa-file-import"></i>, title: t('feature1_title'), description: t('feature1_desc') },
+            { icon: <i className="fas fa-id-card"></i>, title: t('feature2_title'), description: t('feature2_desc') },
+            { icon: <i className="fas fa-chart-pie"></i>, title: t('feature3_title'), description: t('feature3_desc') },
+            { icon: <i className="fas fa-code"></i>, title: t('feature4_title'), description: t('feature4_desc') },
+            { icon: <i className="fas fa-graduation-cap"></i>, title: t('feature5_title'), description: t('feature5_desc') },
+        ],
+        [t('features_group2_title')]: [
+            { icon: <i className="fas fa-palette"></i>, title: t('feature6_title'), description: t('feature6_desc') },
+            { icon: <i className="fas fa-comments"></i>, title: t('feature7_title'), description: t('feature7_desc') },
+            { icon: <i className="fas fa-magic"></i>, title: t('feature8_title'), description: t('feature8_desc') },
+            { icon: <i className="fas fa-feather-alt"></i>, title: t('feature9_title'), description: t('feature9_desc') },
+        ],
+        [t('features_group3_title')]: [
+            { icon: <SearchIcon />, title: t('feature10_title'), description: t('feature10_desc') },
+            { icon: <BrainIcon />, title: t('feature11_title'), description: t('feature11_desc') },
+            { icon: <ToolIcon />, title: t('feature12_title'), description: t('feature12_desc') },
+        ],
     };
 
     return (
         <section className="py-20 px-[5%] bg-[#050510]" id="features">
             <div className="max-w-7xl mx-auto text-center">
-                <h2 className="text-3xl md:text-4xl font-bold mb-4">{t('capabilities_main_title')}</h2>
-                <p className="text-lg text-gray-400 mb-12">{t('capabilities_main_subtitle')}</p>
-
-                <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-12">
-                    {Object.entries(featureCategories).map(([key, { title, icon }]) => (
-                        <button 
-                            key={key} 
-                            onClick={() => setActiveTab(key)}
-                            className={`capability-tab ${activeTab === key ? 'active' : ''}`}
-                        >
-                            {icon} {title}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-right">
-                    {featureCategories[activeTab].features.map((feature, index) => (
-                        <div key={index} className="feature-card h-full animate-fade-in">
-                            <div className="flex items-center gap-4 mb-4">
-                                <span className="text-3xl text-purple-400">{feature.icon}</span>
-                                <h4 className="text-xl font-bold">{feature.title}</h4>
-                            </div>
-                            <p className="text-gray-300 text-sm leading-relaxed">{feature.description}</p>
+                <h2 className="text-3xl md:text-4xl font-bold mb-4">{t('features_main_title')}</h2>
+                <p className="text-lg text-gray-400 mb-12">{t('features_main_subtitle')}</p>
+                {Object.entries(featureGroups).map(([groupTitle, features]) => (
+                    <div key={groupTitle} className="mb-16">
+                        <h3 className="text-2xl md:text-3xl font-bold mb-8 text-purple-300">{groupTitle}</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                            {features.map((feature, i) => (
+                                <div key={i} className="feature-card h-full">
+                                    <div className="text-4xl text-purple-400 mb-4">{feature.icon}</div>
+                                    <h4 className="text-xl font-bold mb-2">{feature.title}</h4>
+                                    <p className="text-gray-300 text-sm">{feature.description}</p>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
+                    </div>
+                ))}
             </div>
         </section>
     );
 };
-
 
 const AboutSection: React.FC = () => {
     const { t } = useLanguage();
@@ -3256,7 +2967,7 @@ const LandingPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess 
             <LandingPageHeader onAuthClick={handleAuthNav} onNavClick={handleNavClick} />
             <main>
                 <Hero onCTAClick={() => handleAuthNav('signup')} />
-                <CapabilitiesSection />
+                <DetailedFeatures />
                 <AboutSection />
             </main>
             <Footer />
@@ -3323,7 +3034,7 @@ const App: React.FC = () => {
                 .nav-link:hover { color: #00bfff; }
                 .nav-link::after { content: ''; position: absolute; bottom: 0; left: 0; width: 0; height: 2px; background: linear-gradient(135deg, #8a2be2, #00bfff); transition: width 0.3s ease; }
                 .nav-link:hover::after { width: 100%; }
-                .feature-card { display: flex; flex-direction: column; background: rgba(20, 20, 40, 0.6); border-radius: 1rem; padding: 2rem; text-align: right; transition: all 0.3s ease; border: 1px solid rgba(138, 43, 226, 0.2); }
+                .feature-card { display: flex; flex-direction: column; background: rgba(20, 20, 40, 0.6); border-radius: 1rem; padding: 2rem; text-align: center; transition: all 0.3s ease; border: 1px solid rgba(138, 43, 226, 0.2); }
                 .feature-card:hover { transform: translateY(-10px); box-shadow: 0 10px 30px rgba(138, 43, 226, 0.3); border-color: rgba(138, 43, 226, 0.5); }
                 .social-link { font-size: 1.75rem; color: #a3a3c2; transition: all 0.3s ease; }
                 .social-link:hover { color: #00bfff; transform: scale(1.1); }
@@ -3332,7 +3043,7 @@ const App: React.FC = () => {
                 .modal-input { width: 100%; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #8a2be2; background: #050510; color: white; outline: none; transition: all 0.2s; }
                 .modal-input:focus { box-shadow: 0 0 0 2px #00bfff; }
                 @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-                .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+                .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
                 @keyframes fade-in-right { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
                 .animate-fade-in-right { animation: fade-in-right 0.3s ease-out forwards; }
                 .setting-card { background: #0a0a1a; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid rgba(138,43,226,0.2); }
@@ -3346,28 +3057,6 @@ const App: React.FC = () => {
                 .toggle-switch:checked::after { transform: translateX(20px); }
                 .suggestion-card { text-align: right; background-color: rgba(30, 30, 62, 0.5); border: 1px solid rgba(138, 43, 226, 0.2); padding: 1rem; border-radius: 0.75rem; transition: all 0.2s ease-in-out; }
                 .suggestion-card:hover { background-color: rgba(45, 45, 80, 0.8); border-color: #8a2be2; transform: translateY(-4px); }
-                .capability-tab {
-                    padding: 0.6rem 1.2rem;
-                    font-size: 0.9rem;
-                    font-weight: 600;
-                    border-radius: 30px;
-                    border: 1px solid rgba(138, 43, 226, 0.3);
-                    background-color: rgba(30, 30, 60, 0.5);
-                    color: #c0c0ff;
-                    transition: all 0.3s ease;
-                    display: inline-flex;
-                    align-items: center;
-                }
-                .capability-tab:hover {
-                    background-color: rgba(138, 43, 226, 0.2);
-                    color: white;
-                }
-                .capability-tab.active {
-                    background: linear-gradient(135deg, #8a2be2, #00bfff);
-                    color: white;
-                    border-color: transparent;
-                    box-shadow: 0 0 15px rgba(138, 43, 226, 0.5);
-                }
 
                 /* Canvas View Styles */
                 .canvas-view {
@@ -3613,41 +3302,6 @@ const App: React.FC = () => {
                 /* Code Project Styles */
                 .review-section { background: rgba(10,10,26,0.7); padding: 1rem; border-radius: 0.5rem; border-left: 3px solid #8a2be2; }
                 .review-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem; display: flex; align-items: center; }
-
-                /* YouTube Search Results Styles */
-                .youtube-results-container { width: 100%; }
-                .youtube-results-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-                    gap: 1rem;
-                }
-                .youtube-video-card {
-                    background: rgba(10,10,26,0.7);
-                    border-radius: 0.5rem;
-                    overflow: hidden;
-                    cursor: pointer;
-                    transition: transform 0.2s ease, box-shadow 0.2s ease;
-                    border: 1px solid rgba(138,43,226,0.2);
-                }
-                .youtube-video-card:hover {
-                    transform: translateY(-5px);
-                    box-shadow: 0 5px 15px rgba(138,43,226,0.3);
-                }
-                .youtube-embed-container {
-                    position: relative;
-                    width: 100%;
-                    padding-top: 56.25%; /* 16:9 Aspect Ratio */
-                    background-color: #000;
-                    border-radius: 0.5rem;
-                }
-                .youtube-embed-container iframe {
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    border: 0;
-                }
 
             `}</style>
         </LanguageProvider>

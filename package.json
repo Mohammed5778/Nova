@@ -1,5 +1,5 @@
 {
-  "name": "copy-of-copy-of--nova-ai-رسمي",
+  "name": "nova",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,16 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^1.13.0",
-    "react-dom": "^19.1.1",
-    "react": "^19.1.1",
-    "pdfjs-dist": "4.5.136",
-    "xlsx": "^0.18.5",
-    "chart.js": "^4.5.0",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^2.5.1",
-    "path": "^0.12.7",
-    "vite": "^7.1.1"
+    "@google/genai": "^1.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

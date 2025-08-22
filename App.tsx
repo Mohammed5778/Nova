@@ -1,13 +1,13 @@
 
-
-import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { getAiResponseStream, generateImage as generateImageService, extractUserInfo, enhancePromptForImage } from './services/geminiService';
+import React, { useState, useEffect, useRef, useCallback, createContext, useContext, useMemo } from 'react';
+import { getAiResponseStream, generateImage, enhancePromptForImage, generateVideo, extractUserInfo } from './services/geminiService';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
 import { Part } from '@google/genai';
 import Chart from 'chart.js/auto';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import katex from 'katex';
 import { translations, TranslationKey } from './translations';
 
 
@@ -34,13 +34,12 @@ const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children })
     const setLanguage = (lang: Language) => {
         localStorage.setItem('nova-language', lang);
         setLanguageState(lang);
-        // Set HTML lang attribute for accessibility
         document.documentElement.lang = lang;
     };
 
     useEffect(() => {
         document.documentElement.lang = language;
-        document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+        document.documentElement.dir = 'rtl'; // Always keep RTL direction
     }, [language]);
 
 
@@ -79,11 +78,62 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
     reader.onerror = error => reject(error);
 });
 
+const exportElementAsPdf = async (element: HTMLElement, filename: string) => {
+    const tempClass = 'pdf-export-active';
+    element.classList.add(tempClass);
+
+    // Wait a moment for styles to apply before capturing
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    try {
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff', // Explicitly set background
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasHeight / canvasWidth;
+        const imgHeight = pdfWidth * ratio;
+        
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+
+        while (heightLeft > 0) {
+            position = position - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
+        }
+        pdf.save(filename);
+
+    } catch (error) {
+        console.error("Error exporting to PDF:", error);
+    } finally {
+        // Always clean up the class
+        element.classList.remove(tempClass);
+    }
+};
+
+
 
 // --- ENUMS & TYPES ---
 enum View {
     CHAT = 'CHAT',
-    IMAGE_STUDIO = 'IMAGE_STUDIO',
+    CREATIVE_STUDIO = 'CREATIVE_STUDIO',
     CREATE_TOOL = 'CREATE_TOOL',
     PROFILE = 'PROFILE',
     SETTINGS = 'SETTINGS',
@@ -109,6 +159,16 @@ interface TableContent { type: 'table'; title: string; data: string[][]; }
 interface ChartContent { type: 'chart'; title: string; data: { chartType: string; chartData: any; }; }
 interface ReportContent { type: 'report'; title: string; data: { section: string; content: string }[]; }
 interface NewsReportContent { type: 'news_report'; title: string; summary: string; articles: { headline: string; source: string; snippet: string; link: string }[]; }
+interface ArticleReviewContent {
+    type: 'article_review';
+    title: string;
+    source: string;
+    url: string;
+    summary: string;
+    key_points: string[];
+    analysis?: string;
+    sentiment?: 'positive' | 'negative' | 'neutral';
+}
 interface ResumeContent {
     type: 'resume';
     name: string;
@@ -140,9 +200,20 @@ interface StudyQuizContent {
         correctAnswer: string | number;
     }[];
 }
+interface YouTubeSearchResultsContent {
+    type: 'youtube_search_results';
+    query: string;
+    videos: {
+        title: string;
+        videoId: string;
+        channel: string;
+        description: string;
+        thumbnailUrl: string;
+    }[];
+}
 
 
-type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent | StudyExplanationContent | StudyReviewContent | StudyQuizContent;
+type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent | StudyExplanationContent | StudyReviewContent | StudyQuizContent | YouTubeSearchResultsContent | ArticleReviewContent;
 
 
 interface Message {
@@ -194,6 +265,13 @@ interface ImageHistoryItem {
     timestamp: number;
 }
 
+interface VideoHistoryItem {
+    id: string;
+    url: string;
+    prompt: string;
+    timestamp: number;
+}
+
 
 // --- ICONS ---
 const LogoIcon = ({ className = "w-8 h-8", style }: { className?: string; style?: React.CSSProperties }) => (
@@ -210,6 +288,8 @@ const LogoIcon = ({ className = "w-8 h-8", style }: { className?: string; style?
 );
 
 const ImageIcon = () => <i className="fas fa-image"></i>;
+const VideoIcon = () => <i className="fas fa-video"></i>;
+const CreativeIcon = () => <i className="fas fa-magic"></i>;
 const ToolIcon = () => <i className="fas fa-tools"></i>;
 const ProfileIcon = () => <i className="fas fa-user"></i>;
 const PaperPlaneIcon = () => <i className="fas fa-paper-plane"></i>;
@@ -270,24 +350,37 @@ const parseXlsxFile = (file: File) => new Promise<string[][]>((resolve, reject) 
 
 const InteractiveTable: React.FC<TableContent> = ({ title, data }) => {
     const { t } = useLanguage();
-    const handleDownload = () => {
+    const tableContainerRef = useRef<HTMLDivElement>(null);
+    
+    const handleDownloadExcel = () => {
         const worksheet = XLSX.utils.aoa_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
         XLSX.writeFile(workbook, `${title || 'table'}.xlsx`);
     };
 
+    const handleDownloadPdf = () => {
+        if (tableContainerRef.current) {
+            exportElementAsPdf(tableContainerRef.current, `${title || 'table'}.pdf`);
+        }
+    };
+
     if (!data || data.length === 0) return <p>{t('no_data_to_display')}</p>;
 
     return (
         <div className="bg-gray-900/50 p-4 rounded-lg my-2 border border-purple-500/30">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
                 <h4 className="font-bold">{title}</h4>
-                <button onClick={handleDownload} className="btn-secondary !text-xs !py-1 !px-3 !rounded-md flex items-center gap-2">
-                    <DownloadIcon /> {t('download_excel')}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={handleDownloadExcel} className="btn-secondary !text-xs !py-1 !px-3 !rounded-md flex items-center gap-2">
+                        <DownloadIcon /> {t('download_excel')}
+                    </button>
+                    <button onClick={handleDownloadPdf} className="btn-secondary !text-xs !py-1 !px-3 !rounded-md flex items-center gap-2">
+                        <FilePdfIcon /> {t('download_pdf')}
+                    </button>
+                </div>
             </div>
-            <div className="overflow-x-auto table-container max-h-96">
+            <div ref={tableContainerRef} className="overflow-x-auto table-container max-h-96">
                 <table className="w-full text-sm text-left border-collapse">
                     <thead className="bg-[#1e1e3e] sticky top-0">
                         <tr>
@@ -342,20 +435,20 @@ const InteractiveChart: React.FC<ChartContent> = ({ title, data }) => {
     );
 };
 
-const CanvasView: React.FC<{
+const ReportView: React.FC<{
     title: string;
     data: { section: string; content: string }[];
     onUpdate: (newTitle: string, newData: { section: string; content: string }[]) => void;
 }> = ({ title, data, onUpdate }) => {
-    const canvasRef = useRef<HTMLDivElement>(null);
+    const reportRef = useRef<HTMLDivElement>(null);
     const { t } = useLanguage();
     
     const handleBlur = () => {
-        if (!canvasRef.current) return;
-        const newTitle = canvasRef.current.querySelector('.canvas-title')?.textContent || title;
-        const newSections = Array.from(canvasRef.current.querySelectorAll('.canvas-section')).map(sectionEl => {
-            const sectionTitle = sectionEl.querySelector('.canvas-section-title')?.textContent || '';
-            const sectionContent = sectionEl.querySelector('.canvas-section-content')?.textContent || '';
+        if (!reportRef.current) return;
+        const newTitle = reportRef.current.querySelector('.report-title')?.textContent || title;
+        const newSections = Array.from(reportRef.current.querySelectorAll('.report-section')).map(sectionEl => {
+            const sectionTitle = sectionEl.querySelector('.report-section-title')?.textContent || '';
+            const sectionContent = sectionEl.querySelector('.report-section-content')?.textContent || '';
             return { section: sectionTitle, content: sectionContent };
         });
         
@@ -365,34 +458,8 @@ const CanvasView: React.FC<{
     };
 
     const handleExport = () => {
-        if (canvasRef.current) {
-            const canvasElement = canvasRef.current;
-            html2canvas(canvasElement, { 
-                backgroundColor: '#ffffff',
-                scale: 2,
-                windowWidth: canvasElement.scrollWidth,
-                windowHeight: canvasElement.scrollHeight,
-            }).then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pageHeight = pdf.internal.pageSize.getHeight();
-                
-                const imgHeight = canvas.height * pdfWidth / canvas.width;
-                let heightLeft = imgHeight;
-                let position = 0;
-
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                heightLeft -= pageHeight;
-
-                while (heightLeft > 0) {
-                    position -= pageHeight;
-                    pdf.addPage();
-                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                    heightLeft -= pageHeight;
-                }
-                pdf.save(`${title.replace(/ /g, '_')}.pdf`);
-            });
+        if (reportRef.current) {
+            exportElementAsPdf(reportRef.current, `${title.replace(/ /g, '_')}.pdf`);
         }
     };
     
@@ -406,14 +473,16 @@ const CanvasView: React.FC<{
                     </button>
                 </div>
             </div>
-            <div ref={canvasRef} className="canvas-view" onBlur={handleBlur}>
-                <h3 contentEditable suppressContentEditableWarning className="canvas-title">{title}</h3>
-                {data.map((item, index) => (
-                    <div key={index} className="canvas-section">
-                        <h4 contentEditable suppressContentEditableWarning className="canvas-section-title">{item.section}</h4>
-                        <p contentEditable suppressContentEditableWarning className="canvas-section-content">{item.content}</p>
-                    </div>
-                ))}
+            <div className="report-view-a4-container">
+                <div ref={reportRef} className="report-view-a4" onBlur={handleBlur}>
+                    <h3 contentEditable suppressContentEditableWarning className="report-title">{title}</h3>
+                    {data.map((item, index) => (
+                        <div key={index} className="report-section">
+                            <h4 contentEditable suppressContentEditableWarning className="report-section-title">{item.section}</h4>
+                            <p contentEditable suppressContentEditableWarning className="report-section-content">{item.content}</p>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -425,13 +494,56 @@ const NewsReportView: React.FC<NewsReportContent> = ({ title, summary, articles 
             <h3 className="text-xl font-bold mb-2 text-purple-300">{title}</h3>
             {summary && <p className="text-sm text-gray-300 mb-4 pb-4 border-b border-purple-500/20">{summary}</p>}
             <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                {articles.map((article, index) => (
+                {(articles || []).map((article, index) => (
                     <a href={article.link} target="_blank" rel="noopener noreferrer" key={index} className="block p-3 bg-black/20 rounded-lg hover:bg-black/40 transition-colors">
                         <h4 className="font-semibold text-white">{article.headline}</h4>
                         <p className="text-xs text-blue-300 mb-1">{article.source}</p>
                         <p className="text-sm text-gray-400">{article.snippet}</p>
                     </a>
                 ))}
+            </div>
+        </div>
+    );
+};
+
+const ArticleReviewView: React.FC<ArticleReviewContent> = ({ title, source, url, summary, key_points, analysis, sentiment }) => {
+    const { t } = useLanguage();
+    const sentimentMeta = {
+        positive: { icon: 'fas fa-thumbs-up', color: 'text-green-400', label: t('sentiment_positive') },
+        negative: { icon: 'fas fa-thumbs-down', color: 'text-red-400', label: t('sentiment_negative') },
+        neutral: { icon: 'fas fa-minus', color: 'text-gray-400', label: t('sentiment_neutral') },
+    };
+    return (
+        <div className="bg-gray-900/50 p-4 rounded-lg my-2 border border-purple-500/30 text-right">
+            <h3 className="text-lg font-bold mb-1 text-purple-300">{title}</h3>
+            <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline block mb-3">{source}</a>
+            
+            <div className="space-y-4">
+                <div className="review-section">
+                    <h5 className="review-title"><i className="fas fa-file-alt mr-2"></i> {t('summary')}</h5>
+                    <p className="text-sm">{summary}</p>
+                </div>
+                <div className="review-section">
+                    <h5 className="review-title"><i className="fas fa-list-ul mr-2"></i> {t('key_points')}</h5>
+                    <ul className="list-disc pr-5 space-y-1 text-sm">
+                        {(key_points || []).map((point, i) => <li key={i}>{point}</li>)}
+                    </ul>
+                </div>
+                {analysis && (
+                    <div className="review-section">
+                        <h5 className="review-title"><i className="fas fa-search-plus mr-2"></i> {t('analysis')}</h5>
+                        <p className="text-sm">{analysis}</p>
+                    </div>
+                )}
+                {sentiment && (
+                    <div className="review-section">
+                        <h5 className="review-title"><i className="fas fa-smile-beam mr-2"></i> {t('sentiment')}</h5>
+                        <div className={`flex items-center gap-2 ${sentimentMeta[sentiment].color}`}>
+                            <i className={sentimentMeta[sentiment].icon}></i>
+                            <span className="font-semibold capitalize">{sentimentMeta[sentiment].label}</span>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -486,19 +598,19 @@ const CodeProjectView: React.FC<{ project: CodeProjectContent, onPreviewCode: (c
                     <div className="review-section">
                          <h5 className="review-title"><i className={`${reviewIcons.strengths} mr-2 text-green-400`}></i> {t('strengths')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
-                            {review.strengths.map((item, i) => <li key={i}>{item}</li>)}
+                            {(review.strengths || []).map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                     </div>
                     <div className="review-section">
                          <h5 className="review-title"><i className={`${reviewIcons.improvements} mr-2 text-yellow-400`}></i> {t('improvement_suggestions')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
-                            {review.improvements.map((item, i) => <li key={i}>{item}</li>)}
+                            {(review.improvements || []).map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                     </div>
                      <div className="review-section">
                          <h5 className="review-title"><i className={`${reviewIcons.nextSteps} mr-2 text-blue-400`}></i> {t('next_steps')}</h5>
                         <ul className="list-disc pl-5 space-y-1">
-                            {review.nextSteps.map((item, i) => <li key={i}>{item}</li>)}
+                            {(review.nextSteps || []).map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                     </div>
                 </div>
@@ -535,46 +647,7 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
 
     const handleExport = () => {
         if (resumeRef.current) {
-            const elToClone = resumeRef.current;
-            // Temporarily set direction for canvas rendering if creative template
-            const originalDir = elToClone.dir;
-            if (template === 'creative') {
-                elToClone.dir = 'ltr';
-            }
-            
-            html2canvas(elToClone, {
-                scale: 2,
-                backgroundColor: '#ffffff',
-                windowWidth: elToClone.scrollWidth,
-                windowHeight: elToClone.scrollHeight,
-            }).then(canvas => {
-                // Restore original direction
-                elToClone.dir = originalDir;
-
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                const imgWidth = canvas.width;
-                const imgHeight = canvas.height;
-                const ratio = imgHeight / imgWidth;
-                const canvasHeightOnPdf = pdfWidth * ratio;
-
-                let heightLeft = canvasHeightOnPdf;
-                let position = 0;
-
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
-                heightLeft -= pdfHeight;
-
-                while (heightLeft > 0) {
-                    position = position - pdfHeight;
-                    pdf.addPage();
-                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
-                    heightLeft -= pdfHeight;
-                }
-
-                pdf.save(`${name.replace(/ /g, '_')}_Resume.pdf`);
-            });
+            exportElementAsPdf(resumeRef.current, `${name.replace(/ /g, '_')}_Resume.pdf`);
         }
     };
     
@@ -626,12 +699,12 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
                         </div>
                         <div className="resume-section">
                             <h3><i className="fas fa-briefcase"></i> {t('work_experience')}</h3>
-                            {experience.map((exp, i) => (
+                            {(experience || []).map((exp, i) => (
                                 <div key={i} className="resume-item">
                                     <h4>{exp.title}</h4>
                                     <h5>{exp.company} | {exp.location}</h5>
                                     <h6>{exp.dates}</h6>
-                                    <ul>{exp.responsibilities.map((r, j) => <li key={j}>{r}</li>)}</ul>
+                                    <ul>{(exp.responsibilities || []).map((r, j) => <li key={j}>{r}</li>)}</ul>
                                 </div>
                             ))}
                         </div>
@@ -661,7 +734,7 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
                         </div>
                         <div className="resume-section">
                             <h3><i className="fas fa-graduation-cap"></i> {t('education')}</h3>
-                             {education.map((edu, i) => (
+                             {(education || []).map((edu, i) => (
                                 <div key={i} className="resume-item">
                                     <h4>{edu.degree}</h4>
                                     <h5>{edu.institution}</h5>
@@ -672,10 +745,10 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
                         </div>
                         <div className="resume-section">
                             <h3><i className="fas fa-cogs"></i> {t('skills')}</h3>
-                             {skills.map((skillCat, i) => (
+                             {(skills || []).map((skillCat, i) => (
                                 <div key={i} className="mb-2 skills-category">
                                     <h4>{skillCat.category}</h4>
-                                    <p>{skillCat.items.join(', ')}</p>
+                                    <p>{(skillCat.items || []).join(', ')}</p>
                                 </div>
                             ))}
                         </div>
@@ -686,14 +759,170 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
     );
 };
 
-// --- STUDY MODE COMPONENTS ---
+const YouTubeSearchResultsView: React.FC<YouTubeSearchResultsContent & { onPlayVideo: (videoId: string) => void }> = ({ query, videos, onPlayVideo }) => {
+    const { t } = useLanguage();
+    
+    return (
+        <div className="youtube-results-container">
+            <h4 className="font-bold mb-4">{t('youtube_search_results', query)}</h4>
+            <div className="youtube-results-grid">
+                {(videos || []).map((video) => (
+                    <div key={video.videoId} className="youtube-video-card group" onClick={() => onPlayVideo(video.videoId)}>
+                        <div className="relative">
+                            <img src={video.thumbnailUrl} alt={video.title} className="w-full h-auto rounded-t-lg" />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i className="fab fa-youtube text-red-500 text-5xl"></i>
+                            </div>
+                        </div>
+                        <div className="p-3">
+                            <h5 className="font-semibold text-sm line-clamp-2" title={video.title}>{video.title}</h5>
+                            <p className="text-xs text-gray-400 mt-1">{video.channel}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+
+// --- ADVANCED RENDERERS (MERMAID, KATEX) & MARKDOWN ---
+
+const MermaidDiagram: React.FC<{ chart: string }> = React.memo(({ chart }) => {
+    const ref = useRef<HTMLDivElement>(null);
+    const { t } = useLanguage();
+
+    useEffect(() => {
+        if (ref.current && chart) {
+            (window as any).mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+            (window as any).mermaid.render(`mermaid-${Date.now()}`, chart)
+                .then(({ svg }: { svg: string }) => {
+                    if (ref.current) {
+                        ref.current.innerHTML = svg;
+                    }
+                })
+                .catch((e: any) => {
+                    console.error('Mermaid rendering error:', e);
+                    if (ref.current) {
+                        ref.current.innerHTML = `<p class="text-red-400">Error rendering diagram.</p>`;
+                    }
+                });
+        }
+    }, [chart]);
+
+    const handleDownloadSvg = useCallback(() => {
+        if (ref.current?.innerHTML) {
+            const svgContent = ref.current.innerHTML;
+            const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `nova-ai-diagram-${Date.now()}.svg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    }, []);
+
+    const handleDownloadPng = useCallback(() => {
+        if (ref.current?.innerHTML) {
+            const svgString = ref.current.innerHTML;
+            const svgElement = ref.current.querySelector('svg');
+            if (!svgElement) return;
+
+            // Get dimensions from SVG
+            const widthAttr = svgElement.getAttribute('width');
+            const heightAttr = svgElement.getAttribute('height');
+            const viewBox = svgElement.getAttribute('viewBox')?.split(' ').map(Number);
+            
+            const width = widthAttr ? parseFloat(widthAttr) : (viewBox ? viewBox[2] : 800);
+            const height = heightAttr ? parseFloat(heightAttr) : (viewBox ? viewBox[3] : 600);
+            const scale = 2; // For higher resolution
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            
+            ctx.fillStyle = '#1e1f20'; // Match app theme background for better look
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const link = document.createElement('a');
+                link.download = `nova-ai-diagram-${Date.now()}.png`;
+                link.href = canvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+            img.onerror = (e) => console.error("Image loading for canvas failed", e);
+            // Use btoa to handle special characters correctly in the data URL
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            img.src = URL.createObjectURL(svgBlob);
+        }
+    }, []);
+
+    return (
+        <div className="relative group/diagram my-4">
+            <div className="mermaid-container" ref={ref} />
+            <div className="absolute top-2 right-2 z-10 flex items-center gap-2 opacity-0 group-hover/diagram:opacity-100 transition-opacity">
+                <button onClick={handleDownloadSvg} title={t('download_svg')} className="diagram-download-btn">
+                    <i className="fas fa-code mr-1"></i> SVG
+                </button>
+                <button onClick={handleDownloadPng} title={t('download_png')} className="diagram-download-btn">
+                    <i className="fas fa-image mr-1"></i> PNG
+                </button>
+            </div>
+        </div>
+    );
+});
+
+
+const KatexDisplay: React.FC<{ math: string, displayMode: boolean }> = React.memo(({ math, displayMode }) => {
+    const html = useMemo(() => {
+        try {
+            return katex.renderToString(math, {
+                throwOnError: false,
+                displayMode: displayMode,
+            });
+        } catch (e) {
+            console.error('Katex rendering error:', e);
+            return `<p class="text-red-400">Error rendering math formula.</p>`;
+        }
+    }, [math, displayMode]);
+
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+});
 
 const RichMarkdownRenderer: React.FC<{ markdown: string, onPreviewCode: (code: string, language: string) => void }> = ({ markdown, onPreviewCode }) => {
-    const parts = markdown.split(/(```[\s\S]*?```|\$\$[\s\S]*?\$\$|\|(?:[^|\r\n]*\|)+)/g).filter(Boolean);
+    const renderSimpleMarkdown = (text: string) => {
+        let html = text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');       // Italic
+
+        return html.split('\n').map((line, lineIndex) => {
+            if (line.startsWith('### ')) return <h4 key={lineIndex} className="text-lg font-bold mt-4 mb-2">{line.substring(4)}</h4>;
+            if (line.startsWith('## ')) return <h3 key={lineIndex} className="text-xl font-bold mt-5 mb-3 text-purple-300">{line.substring(3)}</h3>;
+            if (line.startsWith('# ')) return <h2 key={lineIndex} className="text-2xl font-bold mt-6 mb-4 text-purple-200">{line.substring(2)}</h2>;
+            if (line.startsWith('- ') || line.startsWith('* ')) return <li key={lineIndex} className="ml-5">{line.substring(2)}</li>
+            if (line.trim() === '') return null;
+            return <p key={lineIndex} className="my-2 leading-relaxed" dangerouslySetInnerHTML={{ __html: line }} />;
+        });
+    };
+
+    const parts = useMemo(() => markdown.split(/(```[\s\S]*?```|\$\$[\s\S]*?\$\$)/g).filter(Boolean), [markdown]);
 
     return (
         <div>
             {parts.map((part, index) => {
+                if (part.startsWith('```mermaid')) {
+                    const chart = part.replace(/```mermaid\n|```/g, '').trim();
+                    return <MermaidDiagram key={index} chart={chart} />;
+                }
                 if (part.startsWith('```')) {
                     const codeMatch = part.match(/```(\w*)\n([\s\S]+)\n```/);
                     if (codeMatch) {
@@ -704,19 +933,17 @@ const RichMarkdownRenderer: React.FC<{ markdown: string, onPreviewCode: (code: s
                 }
                 if (part.startsWith('$$') && part.endsWith('$$')) {
                     const math = part.substring(2, part.length - 2).trim();
-                    return (
-                        <div key={index} className="p-4 my-2 bg-black/30 rounded-lg text-center text-lg font-mono text-purple-300 overflow-x-auto" dir="ltr">
-                            {math}
-                        </div>
-                    );
+                    return <KatexDisplay key={index} math={math} displayMode={true} />;
                 }
-                if (part.startsWith('|')) {
-                    const rows = part.split('\n').filter(row => row.includes('|'));
-                    const tableData = rows.map(row => row.split('|').map(cell => cell.trim()).slice(1, -1));
-                    if (tableData.length < 2) return <p key={index}>{part}</p>; // Not a valid table
+                 if (part.startsWith('|')) { // Basic Table Support
+                    const rows = part.split('\n').filter(row => row.includes('|')).map(row => row.trim());
+                    if (rows.length < 2) return renderSimpleMarkdown(part);
 
+                    const tableData = rows.map(row => row.split('|').map(cell => cell.trim()).slice(1, -1));
+                    if (tableData.length < 2 || tableData[1].some(cell => !cell.includes('---'))) return renderSimpleMarkdown(part);
+                    
                     const header = tableData[0];
-                    const body = tableData.slice(2); // Skip header and separator line
+                    const body = tableData.slice(2);
                     return (
                         <div key={index} className="overflow-x-auto my-4">
                             <table className="w-full text-sm text-left border-collapse markdown-table">
@@ -736,19 +963,14 @@ const RichMarkdownRenderer: React.FC<{ markdown: string, onPreviewCode: (code: s
                         </div>
                     );
                 }
-                // Handle simple text, headings, and lists
-                return part.split('\n').map((line, lineIndex) => {
-                    if (line.startsWith('### ')) return <h4 key={`${index}-${lineIndex}`} className="text-lg font-bold mt-4 mb-2">{line.substring(4)}</h4>;
-                    if (line.startsWith('## ')) return <h3 key={`${index}-${lineIndex}`} className="text-xl font-bold mt-5 mb-3 text-purple-300">{line.substring(3)}</h3>;
-                    if (line.startsWith('# ')) return <h2 key={`${index}-${lineIndex}`} className="text-2xl font-bold mt-6 mb-4 text-purple-200">{line.substring(2)}</h2>;
-                    if (line.startsWith('- ') || line.startsWith('* ')) return <li key={`${index}-${lineIndex}`} className="ml-5">{line.substring(2)}</li>
-                    if (line.trim() === '') return null;
-                    return <p key={`${index}-${lineIndex}`} className="my-2 leading-relaxed">{line}</p>;
-                });
+                return <React.Fragment key={index}>{renderSimpleMarkdown(part)}</React.Fragment>;
             })}
         </div>
     );
 };
+
+
+// --- STUDY MODE COMPONENTS ---
 
 const StudyExplanationView: React.FC<{
     data: StudyExplanationContent;
@@ -785,7 +1007,7 @@ const StudyReviewView: React.FC<{ data: StudyReviewContent }> = ({ data }) => {
                 <div className="review-block">
                     <h4>{data.review.title}</h4>
                     <ul className="list-disc pl-5 space-y-1">
-                        {data.review.points.map((point, i) => <li key={i}>{point}</li>)}
+                        {(data.review?.points || []).map((point, i) => <li key={i}>{point}</li>)}
                     </ul>
                 </div>
             </div>
@@ -915,48 +1137,28 @@ const CodeBlock: React.FC<{ code: string; language: string; onPreview: (code: st
     );
 };
 
-const MessageBubble: React.FC<{ 
-    message: Message, 
-    onSaveMemory: (message: Message) => void, 
-    onPreviewCode: (code: string, language: string) => void, 
-    onUpdateMessageContent: (messageId: string, newContent: RichContent) => void,
-    onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void 
-}> = ({ message, onSaveMemory, onPreviewCode, onUpdateMessageContent, onStudyFollowUp }) => {
+interface MessageBubbleProps {
+    message: Message;
+    onSaveMemory: (message: Message) => void;
+    onPreviewCode: (code: string, language: string) => void;
+    onUpdateMessageContent: (messageId: string, newContent: RichContent | string) => void;
+    onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void;
+    onPlayVideo: (videoId: string) => void;
+}
+
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onSaveMemory, onPreviewCode, onUpdateMessageContent, onStudyFollowUp, onPlayVideo }) => {
     const isUser = message.role === 'user';
     const alignClass = isUser ? 'self-end' : 'self-start';
     const bgClass = isUser
-        ? 'bg-gradient-to-r from-[#8a2be2] to-[#00bfff] text-white rounded-br-lg'
-        : 'bg-[rgba(30,30,60,0.8)] border border-[rgba(138,43,226,0.3)] rounded-bl-lg';
+        ? 'bg-blue-gradient text-white rounded-br-lg'
+        : 'bg-model-message-bg rounded-bl-lg';
     const { t } = useLanguage();
 
     const renderContent = () => {
         const { content } = message;
 
         if (typeof content === 'string') {
-            const codeBlockRegex = /```(\w*)\n([\s\S]+?)\n```/g;
-            const parts = [];
-            let lastIndex = 0;
-            let match;
-    
-            while ((match = codeBlockRegex.exec(content)) !== null) {
-                if (match.index > lastIndex) {
-                    parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap">{content.substring(lastIndex, match.index)}</p>);
-                }
-                const language = match[1] || 'plaintext';
-                const code = match[2].trim();
-                parts.push(<CodeBlock key={`code-${match.index}`} language={language} code={code} onPreview={onPreviewCode} />);
-                lastIndex = codeBlockRegex.lastIndex;
-            }
-    
-            if (lastIndex < content.length) {
-                parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap">{content.substring(lastIndex)}</p>);
-            }
-    
-            if (parts.length === 0) {
-                return <p className="whitespace-pre-wrap">{content}</p>;
-            }
-    
-            return parts;
+            return <RichMarkdownRenderer markdown={content} onPreviewCode={onPreviewCode} />;
         }
         
         if (typeof content === 'object' && content !== null) {
@@ -964,7 +1166,7 @@ const MessageBubble: React.FC<{
             switch (richContent.type) {
                 case 'table': return <InteractiveTable {...richContent} />;
                 case 'chart': return <InteractiveChart {...richContent} />;
-                case 'report': return <CanvasView 
+                case 'report': return <ReportView 
                                         title={richContent.title} 
                                         data={richContent.data}
                                         onUpdate={(newTitle, newData) => {
@@ -973,11 +1175,13 @@ const MessageBubble: React.FC<{
                                         }}
                                     />;
                 case 'news_report': return <NewsReportView {...richContent} />;
+                case 'article_review': return <ArticleReviewView {...richContent} />;
                 case 'resume': return <ResumeView resume={richContent} onUpdate={(updatedResume) => onUpdateMessageContent(message.id, updatedResume)} />;
                 case 'code_project': return <CodeProjectView project={richContent} onPreviewCode={onPreviewCode} />;
                 case 'study_explanation': return <StudyExplanationView data={richContent} onFollowUp={onStudyFollowUp} onPreviewCode={onPreviewCode} />;
                 case 'study_review': return <StudyReviewView data={richContent} />;
                 case 'study_quiz': return <StudyQuizView data={richContent} />;
+                case 'youtube_search_results': return <YouTubeSearchResultsView {...richContent} onPlayVideo={onPlayVideo} />;
                 default: return <p>{t('unsupported_content')}</p>;
             }
         }
@@ -1058,7 +1262,8 @@ const MainSidebar: React.FC<{
     onLogout: () => void;
     isDrawerOpen: boolean;
     onCloseDrawer: () => void;
-}> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, currentView, onSetView, onLogout, isDrawerOpen, onCloseDrawer }) => {
+    userPoints: number;
+}> = ({ sessions, tools, activeId, onSelectSession, onNewChat, onNewTempChat, onDeleteSession, isCollapsed, currentView, onSetView, onLogout, isDrawerOpen, onCloseDrawer, userPoints }) => {
     const { t } = useLanguage();
     const sortedSessions = Object.values(sessions).sort((a, b) => {
         const timeA = a.messages[a.messages.length - 1]?.id || '0';
@@ -1067,7 +1272,7 @@ const MainSidebar: React.FC<{
     });
 
     const mainNavItems = [
-        { id: View.IMAGE_STUDIO, icon: <ImageIcon />, label: t('image_studio') },
+        { id: View.CREATIVE_STUDIO, icon: <CreativeIcon />, label: t('creative_studio') },
         { id: View.CREATE_TOOL, icon: <ToolIcon />, label: t('manage_tools') },
         { id: View.PROFILE, icon: <ProfileIcon />, label: t('profile') },
         { id: View.SETTINGS, icon: <SettingsIcon />, label: t('settings') },
@@ -1155,6 +1360,13 @@ const MainSidebar: React.FC<{
                 </div>
             </div>
 
+            <div className={`pt-2 border-t border-purple-500/10 w-full ${isCollapsed && !isMobile ? 'px-1' : 'px-3'}`}>
+                <div className="bg-purple-900/50 rounded-lg p-2 text-center my-2">
+                    <div className="font-bold text-lg">⚡️ {userPoints}</div>
+                    <div className="text-xs text-purple-300">{t('points')}</div>
+                </div>
+            </div>
+
             <div className="mt-auto w-full flex flex-col gap-2 pt-2 border-t border-purple-500/10">
                  {mainNavItems.map(item => (
                      <button
@@ -1178,11 +1390,11 @@ const MainSidebar: React.FC<{
     return (
         <>
             {/* Mobile Drawer */}
-            <aside className={`lg:hidden fixed top-0 bottom-0 right-0 h-full z-50 bg-[rgba(10,10,26,0.95)] backdrop-blur-md flex flex-col p-3 border-l border-purple-500/20 transition-transform duration-300 w-72 ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <aside className={`lg:hidden fixed top-0 bottom-0 right-0 h-full z-50 bg-sidebar-bg backdrop-blur-md flex flex-col p-3 border-l border-purple-500/20 transition-transform duration-300 w-72 ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                {sidebarContent(true)}
             </aside>
             {/* Desktop Sidebar */}
-            <aside className={`hidden lg:flex bg-[rgba(10,10,26,0.8)] backdrop-blur-md flex-col p-3 border-l border-purple-500/20 transition-all duration-300 relative shrink-0 ${isCollapsed ? 'w-20' : 'w-72'}`}>
+            <aside className={`hidden lg:flex bg-sidebar-bg backdrop-blur-md flex-col p-3 border-l border-purple-500/20 transition-all duration-300 relative shrink-0 ${isCollapsed ? 'w-20' : 'w-72'}`}>
                 {sidebarContent(false)}
             </aside>
         </>
@@ -1201,7 +1413,7 @@ const ImageHistoryCard: React.FC<{
             <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 text-white">
                 <p className="text-xs font-mono line-clamp-4">{item.enhancedPrompt}</p>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => onDownload(item.urls[0], `nova-ai-${item.id}.png`)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('download')}>
+                    <button onClick={() => onDownload(item.urls[0], `nova-ai-image-${item.id}.png`)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('download')}>
                         <DownloadIcon />
                     </button>
                     <button onClick={() => onCopy(item.enhancedPrompt)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('copy_prompt')}>
@@ -1213,62 +1425,101 @@ const ImageHistoryCard: React.FC<{
     );
 };
 
-
-const ImageStudioView: React.FC<{
-    imageHistory: ImageHistoryItem[],
-    onImagesGenerated: (items: ImageHistoryItem) => void
-}> = ({ imageHistory, onImagesGenerated }) => {
+const VideoHistoryCard: React.FC<{
+    item: VideoHistoryItem;
+    onDownload: (url: string, filename: string) => void;
+    onCopy: (text: string) => void;
+}> = ({ item, onDownload, onCopy }) => {
     const { t } = useLanguage();
-    const [prompt, setPrompt] = useState('');
-    const [model, setModel] = useState<'gemini' | 'pollinations'>('gemini');
+    return (
+        <div className="aspect-video bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20 group relative overflow-hidden animate-fade-in">
+            <video src={item.url} loop muted controls className="w-full h-full object-cover rounded-md" />
+            <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 text-white">
+                <p className="text-xs font-mono line-clamp-3">{item.prompt}</p>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => onDownload(item.url, `nova-ai-video-${item.id}.mp4`)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('download')}>
+                        <DownloadIcon />
+                    </button>
+                    <button onClick={() => onCopy(item.prompt)} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded-full text-xs flex-shrink-0" title={t('copy_prompt')}>
+                        <i className="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+const CreativeStudioView: React.FC<{
+    imageHistory: ImageHistoryItem[],
+    videoHistory: VideoHistoryItem[],
+    onImageGenerated: (item: ImageHistoryItem) => void;
+    onVideoGenerated: (item: VideoHistoryItem) => void;
+    userPoints: number;
+    deductPoints: (amount: number) => boolean;
+    onNoPoints: () => void;
+}> = ({ imageHistory, videoHistory, onImageGenerated, onVideoGenerated, userPoints, deductPoints, onNoPoints }) => {
+    const { t } = useLanguage();
+    const [mode, setMode] = useState<'image' | 'video'>('image');
+    const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images');
+
+    // Image State
+    const [imagePrompt, setImagePrompt] = useState('');
+    const [imageModel, setImageModel] = useState<'gemini' | 'pollinations'>('gemini');
     const [style, setStyle] = useState('photorealistic');
     const [numImages, setNumImages] = useState(1);
     const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
-    const [isLoading, setIsLoading] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState('');
+    const [isImageLoading, setIsImageLoading] = useState(false);
+    const [imageLoadingMessage, setImageLoadingMessage] = useState('');
     const [currentImages, setCurrentImages] = useState<string[]>([]);
-    const [error, setError] = useState('');
+    const [imageError, setImageError] = useState('');
+
+    // Video State
+    const [videoPrompt, setVideoPrompt] = useState('');
+    const [videoImage, setVideoImage] = useState<{file: File | null, url: string | null}>({file: null, url: null});
+    const videoFileInputRef = useRef<HTMLInputElement>(null);
+    const [isVideoLoading, setIsVideoLoading] = useState(false);
+    const [videoLoadingMessage, setVideoLoadingMessage] = useState('');
+    const [currentVideo, setCurrentVideo] = useState<string | null>(null);
+    const [videoError, setVideoError] = useState('');
     
-    const sortedHistory = [...imageHistory].sort((a,b) => b.timestamp - a.timestamp);
+    // History
+    const sortedImageHistory = [...imageHistory].sort((a,b) => b.timestamp - a.timestamp);
+    const sortedVideoHistory = [...videoHistory].sort((a,b) => b.timestamp - a.timestamp);
+    
+    // Costs
+    const imageCost = 20 * numImages;
+    const videoCost = 200;
 
     const imageStyles = [
-        { value: 'photorealistic', label: t('style_photorealistic') },
-        { value: 'cinematic', label: t('style_cinematic') },
-        { value: 'fantasy', label: t('style_fantasy') },
-        { value: 'anime', label: t('style_anime') },
-        { value: 'digital_art', label: t('style_digital_art') },
-        { value: '3d_model', label: t('style_3d_model') },
+        { value: 'photorealistic', label: t('style_photorealistic') }, { value: 'cinematic', label: t('style_cinematic') },
+        { value: 'fantasy', label: t('style_fantasy') }, { value: 'anime', label: t('style_anime') },
+        { value: 'digital_art', label: t('style_digital_art') }, { value: '3d_model', label: t('style_3d_model') },
     ];
+    
+    const handleGenerateImage = async () => {
+        if (!imagePrompt) { setImageError(t('error_prompt_required')); return; }
+        if (userPoints < imageCost) { onNoPoints(); return; }
+        if (!deductPoints(imageCost)) return;
 
-    const handleGenerate = async () => {
-        if (!prompt) {
-            setError(t('error_prompt_required'));
-            return;
-        }
-        setIsLoading(true);
-        setError('');
-        setCurrentImages([]);
-        setLoadingMessage(t('loading_enhancing_prompt'));
+        setIsImageLoading(true); setImageError(''); setCurrentImages([]);
+        setImageLoadingMessage(t('loading_enhancing_prompt'));
 
         let finalPrompt = '';
         try {
-            finalPrompt = await enhancePromptForImage(prompt, style);
-            setLoadingMessage(t('loading_generating_images'));
+            finalPrompt = await enhancePromptForImage(imagePrompt, style);
+            setImageLoadingMessage(t('loading_generating_images'));
         } catch (e) {
-            console.error("Prompt enhancement failed:", e);
-            setError(t('error_prompt_enhancement_failed'));
-            finalPrompt = prompt; // Fallback to original prompt
+            console.error("Prompt enhancement failed:", e); setImageError(t('error_prompt_enhancement_failed'));
+            finalPrompt = imagePrompt; // Fallback
         }
         
-        let generatedUrls: string[] = [];
-
         try {
-            if (model === 'gemini') {
-                generatedUrls = await generateImageService(finalPrompt, aspectRatio, numImages);
-            } else { // Pollinations model
-                const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
-                // We need to fetch and convert to base64 to store it like Gemini images for consistency
-                 const response = await fetch(imageUrl);
+            let generatedUrls: string[];
+            if (imageModel === 'gemini') {
+                generatedUrls = await generateImage(finalPrompt, aspectRatio, numImages);
+            } else {
+                 const response = await fetch(`https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`);
                  if (!response.ok) throw new Error("Network response was not ok from Pollinations.");
                  const blob = await response.blob();
                  generatedUrls = [await new Promise((resolve, reject) => {
@@ -1281,118 +1532,205 @@ const ImageStudioView: React.FC<{
             
             setCurrentImages(generatedUrls);
             const newHistoryItem: ImageHistoryItem = {
-                id: Date.now().toString(),
-                urls: generatedUrls,
-                prompt: prompt,
-                enhancedPrompt: finalPrompt,
-                model: model,
-                style: style,
-                aspectRatio: aspectRatio,
-                timestamp: Date.now(),
+                id: Date.now().toString(), urls: generatedUrls, prompt: imagePrompt, enhancedPrompt: finalPrompt,
+                model: imageModel, style: style, aspectRatio: aspectRatio, timestamp: Date.now(),
             };
-            onImagesGenerated(newHistoryItem);
+            onImageGenerated(newHistoryItem);
+            setActiveTab('images');
 
         } catch (e) {
             console.error(e);
-            const modelName = model === 'gemini' ? 'Gemini' : 'Nova gen 1';
-            setError(t('error_image_generation_failed', modelName));
+            setImageError(t('error_image_generation_failed', imageModel === 'gemini' ? 'Gemini' : 'Nova gen 1'));
         } finally {
-            setIsLoading(false);
-            setLoadingMessage('');
+            setIsImageLoading(false); setImageLoadingMessage('');
         }
     };
     
+    const handleGenerateVideo = async () => {
+        if (!videoPrompt) { setVideoError(t('error_prompt_required')); return; }
+        if (userPoints < videoCost) { onNoPoints(); return; }
+        if (!deductPoints(videoCost)) return;
+
+        setIsVideoLoading(true); setVideoError(''); setCurrentVideo(null);
+        
+        try {
+            let imageBytes: string | null = null;
+            if (videoImage.file) {
+                imageBytes = await fileToBase64(videoImage.file);
+            }
+            const videoUrl = await generateVideo(videoPrompt, imageBytes, (message) => {
+                setVideoLoadingMessage(message);
+            });
+            setCurrentVideo(videoUrl);
+            const newHistoryItem: VideoHistoryItem = {
+                id: Date.now().toString(), url: videoUrl, prompt: videoPrompt, timestamp: Date.now()
+            };
+            onVideoGenerated(newHistoryItem);
+            setActiveTab('videos');
+        } catch(e) {
+            console.error(e);
+            setVideoError((e as Error).message || t('error_video_generation_failed'));
+        } finally {
+            setIsVideoLoading(false); setVideoLoadingMessage('');
+        }
+    }
+
+    const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            setVideoImage({ file, url: URL.createObjectURL(file) });
+        }
+    }
+
     const handleDownload = (url: string, filename: string) => {
         const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        link.href = url; link.download = filename;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
     
-    const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text);
-    };
+    const handleCopy = (text: string) => navigator.clipboard.writeText(text);
+
+    const hasImagePoints = userPoints >= imageCost;
+    const hasVideoPoints = userPoints >= videoCost;
 
     return (
-        <div className="flex flex-col md:flex-row h-full w-full overflow-hidden">
+        <div className="flex flex-col md:flex-row h-full w-full">
             {/* Controls Panel */}
-            <div className="w-full md:w-96 p-4 md:p-6 bg-[rgba(10,10,26,0.8)] border-l border-purple-500/20 shrink-0 overflow-y-auto">
-                <h1 className="text-2xl font-bold mb-6">{t('image_studio')}</h1>
-                 <div className="bg-[#0a0a1a] p-4 rounded-xl border border-purple-500/20 space-y-4">
-                     <div className="flex justify-center gap-2 p-1 bg-[rgba(30,30,60,0.8)] rounded-full">
-                        <button onClick={() => setModel('gemini')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${model === 'gemini' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Gemini (Imagen 3)</button>
-                        <button onClick={() => setModel('pollinations')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${model === 'pollinations' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Nova gen 1</button>
-                    </div>
-                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={t('image_prompt_placeholder')} className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isLoading}/>
-                    <div className="grid grid-cols-1 gap-4">
-                        <div>
-                            <label className="block text-sm font-bold mb-2 text-gray-400">{t('style')}</label>
-                            <select value={style} onChange={e => setStyle(e.target.value)} className="w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isLoading}>
-                                {imageStyles.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                            </select>
+            <div className="w-full md:w-96 p-4 md:p-6 bg-[rgba(10,10,26,0.8)] border-l border-purple-500/20 shrink-0 md:overflow-y-auto">
+                <h1 className="text-2xl font-bold mb-6">{t('creative_studio')}</h1>
+                <div className="flex justify-center gap-2 p-1 bg-[rgba(30,30,60,0.8)] rounded-full mb-6">
+                    <button onClick={() => setMode('image')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${mode === 'image' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}><ImageIcon /> {t('image_generation')}</button>
+                    <button onClick={() => setMode('video')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${mode === 'video' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}><VideoIcon /> {t('video_generation')}</button>
+                </div>
+                
+                 {/* Image Generation Form */}
+                 {mode === 'image' && (
+                     <div className="bg-[#0a0a1a] p-4 rounded-xl border border-purple-500/20 space-y-4 animate-fade-in">
+                         <div className="flex justify-center gap-2 p-1 bg-[rgba(30,30,60,0.8)] rounded-full">
+                            <button onClick={() => setImageModel('gemini')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${imageModel === 'gemini' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Gemini (Imagen 3)</button>
+                            <button onClick={() => setImageModel('pollinations')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors ${imageModel === 'pollinations' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}>Nova gen 1</button>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)} placeholder={t('image_prompt_placeholder')} className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isImageLoading}/>
+                        <div className="grid grid-cols-1 gap-4">
                             <div>
-                                <label className="block text-sm font-bold mb-2 text-gray-400">{t('aspect_ratio')}</label>
-                                <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value as any)} className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${model !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isLoading || model !== 'gemini'}>
-                                    <option value="1:1">1:1</option>
-                                    <option value="16:9">16:9</option>
-                                    <option value="9:16">9:16</option>
-                                    <option value="4:3">4:3</option>
-                                    <option value="3:4">3:4</option>
+                                <label className="block text-sm font-bold mb-2 text-gray-400">{t('style')}</label>
+                                <select value={style} onChange={e => setStyle(e.target.value)} className="w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isImageLoading}>
+                                    {imageStyles.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                                 </select>
                             </div>
-                            <div>
-                                <label className="block text-sm font-bold mb-2 text-gray-400">{t('number_of_images')}</label>
-                                <input type="number" value={numImages} onChange={e => setNumImages(Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))} min="1" max="4" className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${model !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isLoading || model !== 'gemini'} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold mb-2 text-gray-400">{t('aspect_ratio')}</label>
+                                    <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value as any)} className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${imageModel !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isImageLoading || imageModel !== 'gemini'}>
+                                        <option value="1:1">1:1</option> <option value="16:9">16:9</option> <option value="9:16">9:16</option> <option value="4:3">4:3</option> <option value="3:4">3:4</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold mb-2 text-gray-400">{t('number_of_images')}</label>
+                                    <input type="number" value={numImages} onChange={e => setNumImages(Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))} min="1" max="4" className={`w-full p-3 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2] ${imageModel !== 'gemini' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isImageLoading || imageModel !== 'gemini'} />
+                                </div>
                             </div>
                         </div>
+                        <button onClick={hasImagePoints ? handleGenerateImage : onNoPoints} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base disabled:bg-gray-500 disabled:shadow-none" disabled={isImageLoading}>
+                            {isImageLoading ? imageLoadingMessage : hasImagePoints ? <> <ImageIcon /> {t('generate_images_cost', imageCost)}</> : t('subscribe_for_unlimited')}
+                        </button>
+                        {imageModel === 'pollinations' && <p className="text-xs text-center text-gray-400">{t('pollinations_disclaimer')}</p>}
+                        {imageError && <p className="text-red-400 mt-2 text-center text-sm">{imageError}</p>}
                     </div>
-                    <button onClick={handleGenerate} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base" disabled={isLoading}>
-                        {isLoading ? loadingMessage : <> <ImageIcon /> {t('generate_images')}</>}
-                    </button>
-                    {model === 'pollinations' && <p className="text-xs text-center text-gray-400">{t('pollinations_disclaimer')}</p>}
-                </div>
-                 {error && <p className="text-red-400 mt-4 text-center">{error}</p>}
+                 )}
+
+                 {/* Video Generation Form */}
+                 {mode === 'video' && (
+                     <div className="bg-[#0a0a1a] p-4 rounded-xl border border-purple-500/20 space-y-4 animate-fade-in">
+                        <textarea value={videoPrompt} onChange={e => setVideoPrompt(e.target.value)} placeholder={t('video_prompt_placeholder')} className="w-full p-3 h-24 rounded-lg border-none bg-[rgba(30,30,60,0.8)] text-white outline-none focus:ring-2 focus:ring-[#8a2be2]" disabled={isVideoLoading}/>
+                        
+                        <input type="file" accept="image/*" onChange={handleVideoFileChange} ref={videoFileInputRef} className="hidden" disabled={isVideoLoading} />
+                        <button onClick={() => videoFileInputRef.current?.click()} className="w-full p-3 rounded-lg border-dashed border-2 border-purple-500/50 bg-[rgba(30,30,60,0.8)] text-purple-300 hover:border-purple-500/80 hover:bg-purple-500/10 transition-colors disabled:opacity-50" disabled={isVideoLoading}>
+                            {videoImage.url ? t('change_initial_image') : t('upload_initial_image')}
+                        </button>
+                        
+                        {videoImage.url && (
+                             <div className="relative w-full aspect-video rounded-lg overflow-hidden">
+                                <img src={videoImage.url} alt="Initial image preview" className="w-full h-full object-cover"/>
+                                <button onClick={() => setVideoImage({file: null, url: null})} className="absolute top-1 right-1 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-500/80">&times;</button>
+                            </div>
+                        )}
+
+                        <button onClick={hasVideoPoints ? handleGenerateVideo : onNoPoints} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base disabled:bg-gray-500 disabled:shadow-none" disabled={isVideoLoading}>
+                             {isVideoLoading ? videoLoadingMessage : hasVideoPoints ? <> <VideoIcon /> {t('generate_video_cost', videoCost)}</> : t('subscribe_for_unlimited')}
+                        </button>
+                         {videoError && <p className="text-red-400 mt-2 text-center text-sm">{videoError}</p>}
+                    </div>
+                 )}
             </div>
 
             {/* Gallery */}
-            <div className="flex-1 p-4 md:p-6 overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4">{t('current_results')}</h2>
-                 {isLoading && !currentImages.length && (
-                    <div className="flex items-center justify-center h-48"><div className="w-16 h-16 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>
-                 )}
-                 {currentImages.length > 0 && (
-                     <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8`}>
-                        {currentImages.map((img, index) => (
-                            <div key={`current-${index}`} className="relative group/img bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20">
-                                <img src={img} alt={`${t('generated_image')} ${index + 1}`} className="rounded-md w-full h-auto" />
-                                 <button onClick={() => handleDownload(img, `nova-ai-${Date.now()}-${index}.png`)} className="absolute top-2 right-2 bg-black/50 text-white w-8 h-8 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center" title={t('download_image')}>
-                                    <DownloadIcon />
-                                 </button>
+            <div className="flex-1 p-4 md:p-6 overflow-y-auto flex flex-col">
+                 <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold">{t('history')}</h2>
+                    <div className="flex justify-center gap-1 p-1 bg-[#0a0a1a] rounded-full border border-purple-500/20">
+                        <button onClick={() => setActiveTab('images')} className={`py-1 px-4 rounded-full text-sm font-semibold transition-colors ${activeTab === 'images' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-purple-800/50'}`}>{t('images')}</button>
+                        <button onClick={() => setActiveTab('videos')} className={`py-1 px-4 rounded-full text-sm font-semibold transition-colors ${activeTab === 'videos' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-purple-800/50'}`}>{t('videos')}</button>
+                    </div>
+                </div>
+                
+                 {/* Current Results */}
+                 {(isImageLoading || isVideoLoading || currentImages.length > 0 || currentVideo) && (
+                    <div className="mb-8">
+                        <h3 className="text-lg font-bold mb-3">{t('current_results')}</h3>
+                        {isImageLoading && !currentImages.length && <div className="flex items-center justify-center h-48"><div className="w-10 h-10 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>}
+                        {isVideoLoading && !currentVideo && <div className="flex items-center justify-center h-48"><div className="w-10 h-10 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>}
+                        
+                        {currentImages.length > 0 && (
+                            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {currentImages.map((img, index) => (
+                                    <div key={`current-img-${index}`} className="relative group/img bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20 aspect-square">
+                                        <img src={img} alt={`${t('generated_image')} ${index + 1}`} className="rounded-md w-full h-full object-cover" />
+                                        <button onClick={() => handleDownload(img, `nova-ai-img-${Date.now()}-${index}.png`)} className="absolute top-2 right-2 bg-black/50 text-white w-8 h-8 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center" title={t('download_image')}>
+                                            <DownloadIcon />
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+                        )}
+
+                        {currentVideo && (
+                            <div className="relative group/vid bg-[#0a0a1a] p-1.5 rounded-lg border border-purple-500/20 max-w-md mx-auto">
+                                <video src={currentVideo} controls autoPlay loop className="rounded-md w-full h-auto" />
+                            </div>
+                        )}
                     </div>
                  )}
                 
-                <h2 className="text-xl font-bold mb-4 border-t border-purple-500/20 pt-6">{t('history')}</h2>
-                {sortedHistory.length === 0 ? (
-                    <p className="text-gray-500 text-center mt-8">{t('no_images_generated')}</p>
-                ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                        {sortedHistory.flatMap(item =>
-                             item.urls.map((url, index) => (
-                                 <ImageHistoryCard
-                                     key={`${item.id}-${index}`}
-                                     item={{...item, urls: [url]}} // Pass single url to card
-                                     onDownload={handleDownload}
-                                     onCopy={handleCopy}
-                                 />
-                             ))
+                {/* History Gallery */}
+                {activeTab === 'images' && (
+                    <>
+                        {sortedImageHistory.length === 0 ? (
+                            <div className="flex-1 flex items-center justify-center text-gray-500">{t('no_images_generated')}</div>
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {sortedImageHistory.flatMap(item =>
+                                     item.urls.map((url, index) => (
+                                         <ImageHistoryCard key={`${item.id}-${index}`} item={{...item, urls: [url]}} onDownload={handleDownload} onCopy={handleCopy} />
+                                     ))
+                                )}
+                            </div>
                         )}
-                    </div>
+                    </>
+                )}
+                
+                {activeTab === 'videos' && (
+                     <>
+                        {sortedVideoHistory.length === 0 ? (
+                            <div className="flex-1 flex items-center justify-center text-gray-500">{t('no_videos_generated')}</div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                                {sortedVideoHistory.map(item => (
+                                    <VideoHistoryCard key={item.id} item={item} onDownload={handleDownload} onCopy={handleCopy} />
+                                ))}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </div>
@@ -1444,11 +1782,17 @@ const SettingsView: React.FC<{
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultInternetSearch} onChange={e => onUpdate({ ...settings, defaultInternetSearch: e.target.checked })} />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
-                        <span>{t('enable_deep_thinking')}</span>
+                        <div className="flex items-center gap-2">
+                            <span>{t('enable_deep_thinking')}</span>
+                            <span className="text-xs text-purple-400">({t('deep_thinking_cost_info')})</span>
+                        </div>
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultDeepThinking} onChange={e => onUpdate({ ...settings, defaultDeepThinking: e.target.checked })} />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
-                        <span>{t('enable_scientific_mode')}</span>
+                        <div className="flex items-center gap-2">
+                            <span>{t('enable_scientific_mode')}</span>
+                             <span className="text-xs text-purple-400">({t('scientific_mode_cost_info')})</span>
+                        </div>
                         <input type="checkbox" className="toggle-switch" checked={settings.defaultScientificMode} onChange={e => onUpdate({ ...settings, defaultScientificMode: e.target.checked })} />
                     </label>
                 </div>
@@ -1634,7 +1978,7 @@ const ProfileView: React.FC<{
                      ) : (
                         savedMemories.map(mem => (
                             <div key={mem.id} className="relative group/memory">
-                                <MessageBubble message={mem} onSaveMemory={() => {}} onPreviewCode={() => {}} onUpdateMessageContent={()=>{}} onStudyFollowUp={() => {}}/>
+                                <MessageBubble message={mem} onSaveMemory={() => {}} onPreviewCode={() => {}} onUpdateMessageContent={()=>{}} onStudyFollowUp={() => {}} onPlayVideo={() => {}}/>
                                 <button onClick={() => onDeleteMemory(mem.id)} title={t('delete_memory')} className="absolute top-0 left-0 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center hover:scale-110 opacity-0 group-hover/memory:opacity-100 transition-opacity">
                                     <TrashIcon />
                                 </button>
@@ -1650,8 +1994,20 @@ const ProfileView: React.FC<{
 const SettingsPopover: React.FC<{
     settings: ChatSettings;
     onChange: (newSettings: ChatSettings) => void;
-}> = ({ settings, onChange }) => {
+    userPoints: number;
+    onNoPoints: () => void;
+}> = ({ settings, onChange, userPoints, onNoPoints }) => {
     const { t } = useLanguage();
+    const hasPointsForFeatures = userPoints > 0;
+
+    const handleToggle = (setting: keyof ChatSettings, value: boolean) => {
+        if (!hasPointsForFeatures && value) {
+            onNoPoints();
+            return;
+        }
+        onChange({ ...settings, [setting]: value });
+    };
+
     return (
         <div className="absolute top-full left-0 mt-2 w-64 bg-[#1e1e3e] border border-purple-500/50 rounded-lg shadow-lg p-4 z-20">
             <div className="space-y-4">
@@ -1659,14 +2015,26 @@ const SettingsPopover: React.FC<{
                     <span className="font-semibold">{t('internet_search')}</span>
                     <input type="checkbox" className="toggle-switch" checked={settings.useInternetSearch} onChange={e => onChange({...settings, useInternetSearch: e.target.checked})}/>
                 </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                    <span className="font-semibold">{t('deep_thinking')}</span>
-                     <input type="checkbox" className="toggle-switch" checked={settings.useDeepThinking} onChange={e => onChange({...settings, useDeepThinking: e.target.checked})}/>
-                </label>
-                 <label className="flex items-center justify-between cursor-pointer">
-                    <span className="font-semibold">{t('scientific_mode')}</span>
-                     <input type="checkbox" className="toggle-switch" checked={settings.useScientificMode} onChange={e => onChange({...settings, useScientificMode: e.target.checked})}/>
-                </label>
+                <div 
+                    className={`flex items-center justify-between ${!hasPointsForFeatures ? 'opacity-50' : 'cursor-pointer'}`}
+                    onClick={() => handleToggle('useDeepThinking', !settings.useDeepThinking)}
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold">{t('deep_thinking')}</span>
+                        <span className="text-xs text-purple-400">({t('deep_thinking_cost_info')})</span>
+                    </div>
+                     <input type="checkbox" className="toggle-switch" checked={settings.useDeepThinking} readOnly disabled={!hasPointsForFeatures}/>
+                </div>
+                 <div
+                    className={`flex items-center justify-between ${!hasPointsForFeatures ? 'opacity-50' : 'cursor-pointer'}`}
+                    onClick={() => handleToggle('useScientificMode', !settings.useScientificMode)}
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold">{t('scientific_mode')}</span>
+                        <span className="text-xs text-purple-400">({t('scientific_mode_cost_info')})</span>
+                    </div>
+                     <input type="checkbox" className="toggle-switch" checked={settings.useScientificMode} readOnly disabled={!hasPointsForFeatures}/>
+                </div>
             </div>
         </div>
     );
@@ -1816,7 +2184,7 @@ const WelcomeScreen: React.FC<{ onPromptSelect: (prompt: string) => void }> = ({
     const suggestions = [
         { title: t('welcome_suggestion1_title'), prompt: t('welcome_suggestion1_prompt')},
         { title: t('welcome_suggestion2_title'), prompt: t('welcome_suggestion2_prompt')},
-        { title: t('welcome_suggestion3_title'), prompt: t('welcome_suggestion3_prompt')},
+        { title: t('welcome_suggestion_youtube_title'), prompt: t('welcome_suggestion_youtube_prompt')},
         { title: t('welcome_suggestion4_title'), prompt: t('welcome_suggestion4_prompt')},
     ];
 
@@ -1836,8 +2204,7 @@ const WelcomeScreen: React.FC<{ onPromptSelect: (prompt: string) => void }> = ({
     );
 };
 
-
-const MainChatInterface: React.FC<{
+interface MainChatInterfaceProps {
     session: ChatSession;
     isLoading: boolean;
     onSettingsChange: (settings: ChatSettings) => void;
@@ -1845,10 +2212,15 @@ const MainChatInterface: React.FC<{
     onPreviewCode: (code: string, language: string) => void;
     onAddKnowledgeFile: (file: File) => void;
     onDeleteKnowledgeFile: (index: number) => void;
-    onUpdateMessageContent: (messageId: string, newContent: RichContent) => void;
+    onUpdateMessageContent: (messageId: string, newContent: RichContent | string) => void;
     onToggleDrawer: () => void;
     onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void;
-}> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer, onStudyFollowUp }) => {
+    onPlayVideo: (videoId: string) => void;
+    userPoints: number;
+    onNoPoints: () => void;
+}
+
+const MainChatInterface: React.FC<MainChatInterfaceProps> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer, onStudyFollowUp, onPlayVideo, userPoints, onNoPoints }) => {
     const { t } = useLanguage();
     const [showSettings, setShowSettings] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -1878,9 +2250,9 @@ const MainChatInterface: React.FC<{
 
     return (
         <>
-            <header className="p-4 flex justify-between items-center shrink-0 z-10 border-b border-purple-500/10">
+            <header className="p-4 flex justify-between items-center shrink-0 z-10 border-b border-white/10">
                  <div className="flex items-center gap-2">
-                    <button onClick={onToggleDrawer} className="p-2 rounded-full hover:bg-purple-500/20 lg:hidden">
+                    <button onClick={onToggleDrawer} className="p-2 rounded-full hover:bg-white/10 lg:hidden">
                         <i className="fas fa-bars"></i>
                     </button>
                     <div className="flex-1">
@@ -1888,7 +2260,7 @@ const MainChatInterface: React.FC<{
                         {session.knowledgeFiles && session.knowledgeFiles.length > 0 && (
                             <div className="flex gap-2 mt-1 flex-wrap">
                                 {session.knowledgeFiles.map((file, index) => (
-                                    <div key={index} className="bg-purple-500/20 text-xs px-2 py-1 rounded-full flex items-center gap-1.5">
+                                    <div key={index} className="bg-white/10 text-xs px-2 py-1 rounded-full flex items-center gap-1.5">
                                         <FileTextIcon />
                                         <span className="truncate max-w-[100px]">{file.name}</span>
                                         <button onClick={() => onDeleteKnowledgeFile(index)} className="text-gray-400 hover:text-white"><CloseIcon/></button>
@@ -1900,21 +2272,23 @@ const MainChatInterface: React.FC<{
                 </div>
                 <div className="relative flex items-center gap-2" ref={settingsRef}>
                     <input type="file" ref={knowledgeFileInputRef} onChange={handleKnowledgeFileChange} className="hidden" accept=".pdf,.txt,.md,.csv,.xlsx,.xls" />
-                    <button onClick={() => knowledgeFileInputRef.current?.click()} className="p-2 rounded-full hover:bg-purple-500/20 bg-black/20" title={t('add_knowledge_file_chat')}><BookOpenIcon /></button>
-                    <button onClick={() => setShowSettings(s => !s)} className="p-2 rounded-full hover:bg-purple-500/20 bg-black/20" title={t('current_chat_settings')}><SettingsIcon /></button>
-                    {showSettings && <SettingsPopover settings={session.settings} onChange={onSettingsChange} />}
+                    <button onClick={() => knowledgeFileInputRef.current?.click()} className="p-2 rounded-full hover:bg-white/10 bg-black/20" title={t('add_knowledge_file_chat')}><BookOpenIcon /></button>
+                    <button onClick={() => setShowSettings(s => !s)} className="p-2 rounded-full hover:bg-white/10 bg-black/20" title={t('current_chat_settings')}><SettingsIcon /></button>
+                    {showSettings && <SettingsPopover settings={session.settings} onChange={onSettingsChange} userPoints={userPoints} onNoPoints={onNoPoints} />}
                 </div>
             </header>
-            <div className="flex-1 h-[1px] p-2 md:p-6 overflow-y-auto flex flex-col gap-6">
-                {session.messages.map(msg => <MessageBubble key={msg.id} message={msg} onSaveMemory={onSaveMemory} onPreviewCode={onPreviewCode} onUpdateMessageContent={onUpdateMessageContent} onStudyFollowUp={onStudyFollowUp} />)}
-                {isLoading && (
-                    <div className="self-start flex items-center gap-2 p-4">
-                        <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-0"></div>
-                        <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-200"></div>
-                        <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-400"></div>
-                    </div>
-                )}
-                <div ref={chatEndRef}></div>
+            <div className="flex-1 h-[1px] overflow-y-auto p-0 md:p-4">
+                <div className="mx-auto max-w-4xl flex flex-col gap-6 p-2 md:p-0">
+                    {session.messages.map(msg => <MessageBubble key={msg.id} message={msg} onSaveMemory={onSaveMemory} onPreviewCode={onPreviewCode} onUpdateMessageContent={onUpdateMessageContent} onStudyFollowUp={onStudyFollowUp} onPlayVideo={onPlayVideo}/>)}
+                    {isLoading && (
+                        <div className="self-start flex items-center gap-2 p-4">
+                            <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-0"></div>
+                            <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-200"></div>
+                            <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-pulse delay-400"></div>
+                        </div>
+                    )}
+                    <div ref={chatEndRef}></div>
+                </div>
             </div>
         </>
     );
@@ -1957,7 +2331,7 @@ const ChatInputBar: React.FC<{
 
     return (
          <div className="p-4 bg-transparent relative shrink-0">
-            <div className="max-w-4xl mx-auto flex items-center gap-2 p-2 rounded-full bg-[rgba(12,12,31,0.8)] backdrop-blur-md border border-purple-500/30 shadow-2xl shadow-black/50">
+            <div className="max-w-4xl mx-auto flex items-center gap-2 p-2 rounded-full bg-input-bar-bg backdrop-blur-md border border-white/10 shadow-2xl shadow-black/50">
                 <input
                     type="text"
                     value={input}
@@ -1970,7 +2344,7 @@ const ChatInputBar: React.FC<{
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.txt,.md,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.mp4,.mp3,.wav"/>
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center justify-center text-gray-400 w-10 h-10 rounded-full transition-colors duration-300 hover:bg-purple-500/20 hover:text-white disabled:opacity-50"
+                    className="flex items-center justify-center text-gray-400 w-10 h-10 rounded-full transition-colors duration-300 hover:bg-white/10 hover:text-white disabled:opacity-50"
                     disabled={isLoading}
                     title={t('upload_file')}
                 >
@@ -1978,7 +2352,7 @@ const ChatInputBar: React.FC<{
                 </button>
                 <button
                     onClick={handleSend}
-                    className="bg-gradient-to-r from-[#8a2be2] to-[#00bfff] text-white w-10 h-10 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center hover:scale-105 hover:shadow-[0_0_15px_rgba(138,43,226,0.5)] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-500 disabled:shadow-none"
+                    className="bg-blue-gradient text-white w-10 h-10 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center hover:scale-105 hover:shadow-[0_0_15px_rgba(138,43,226,0.5)] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-500 disabled:shadow-none"
                     disabled={isLoading || (!input.trim() && !filePreview.isOpen)}>
                     <PaperPlaneIcon />
                 </button>
@@ -1987,7 +2361,7 @@ const ChatInputBar: React.FC<{
     )
 }
 
-const ChatView: React.FC<{ 
+interface ChatViewProps {
     globalSettings: GlobalSettings;
     userProfile: Record<string, any>;
     generalMemories: string[];
@@ -1995,7 +2369,7 @@ const ChatView: React.FC<{
     customTools: CustomTool[];
     onUpdateUserProfile: (profile: Record<string, any>) => void;
     onSaveMemory: (message: Message) => void;
-    onImagesGenerated: (item: ImageHistoryItem) => void;
+    onImageGenerated: (item: ImageHistoryItem) => void;
     sessions: Record<string, ChatSession>;
     setSessions: React.Dispatch<React.SetStateAction<Record<string, ChatSession>>>;
     activeId: string | null;
@@ -2005,16 +2379,22 @@ const ChatView: React.FC<{
     temporarySession: ChatSession | null;
     setTemporarySession: React.Dispatch<React.SetStateAction<ChatSession | null>>;
     onToggleDrawer: () => void;
-}> = ({ 
-    globalSettings, userProfile, generalMemories, savedMemories, customTools, onUpdateUserProfile, onSaveMemory, onImagesGenerated,
+    deductPoints: (amount: number) => boolean;
+    userPoints: number;
+    onNoPoints: () => void;
+}
+
+const ChatView: React.FC<ChatViewProps> = ({ 
+    globalSettings, userProfile, generalMemories, savedMemories, customTools, onUpdateUserProfile, onSaveMemory, onImageGenerated,
     sessions, setSessions, activeId, setActiveId, createNewSession, createTempSession,
-    temporarySession, setTemporarySession, onToggleDrawer
+    temporarySession, setTemporarySession, onToggleDrawer, deductPoints, userPoints, onNoPoints
 }) => {
     const { language, t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState>({ isOpen: false, isCollapsed: false, name: '', type: 'unsupported', content: null });
     const [codePreview, setCodePreview] = useState({ isOpen: false, code: '', language: '' });
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
 
     const handleFileUpload = async (file: File) => {
         setFilePreview({ isOpen: true, isCollapsed: false, name: file.name, type: 'loading', content: null });
@@ -2072,56 +2452,114 @@ const ChatView: React.FC<{
             createNewSession();
         }
     };
+
+    const handlePlayVideo = (videoId: string) => {
+        setPlayingVideoId(videoId);
+    };
+
+    const handleCloseVideo = () => {
+        setPlayingVideoId(null);
+    };
     
     const isTempChat = activeId === 'temp-chat';
 
     const handleSendMessage = async (prompt: string, targetSessionId?: string) => {
         const sessionId = targetSessionId || activeId;
-        if (!sessionId) return;
-        if (isLoading) return;
+        if (!sessionId || isLoading) return;
 
         let activeSession = isTempChat ? temporarySession : sessions[sessionId];
         if (!activeSession) return;
         
-        // --- Image Generation Command ---
-        if (prompt.trim().toLowerCase().startsWith('/image ')) {
-            const imagePrompt = prompt.replace(/\/image\s+/i, '').trim();
-            if (!imagePrompt) return;
+        const lowerPrompt = prompt.trim().toLowerCase();
+        let cost = 0;
+        let isCommand = false;
+        
+        // --- Calculate Cost ---
+        if (lowerPrompt.startsWith('/image ')) { isCommand = true; cost = 20; }
+        else if (lowerPrompt.startsWith('/youtube ')) { isCommand = true; cost = 25; }
+        else if (lowerPrompt.startsWith('/resume')) { isCommand = true; cost = 100; }
+        else if (lowerPrompt.startsWith('/report')) { isCommand = true; cost = 75; }
+        else if (lowerPrompt.startsWith('/project')) { isCommand = true; cost = 150; }
+        else if (lowerPrompt.startsWith('/chart') || lowerPrompt.startsWith('/table')) { isCommand = true; cost = 30; }
 
-            const userMessage: Message = { id: Date.now().toString(), role: 'user', content: prompt };
-            const updatedMessages = [...activeSession.messages, userMessage];
-            const updatedSession = { ...activeSession, messages: updatedMessages };
+        if (!isCommand) {
+            if (activeSession.settings.useDeepThinking) cost += 5;
+            if (activeSession.settings.useScientificMode) cost += 10;
+        }
 
-            if (isTempChat) setTemporarySession(updatedSession);
-            else setSessions(s => ({ ...s, [sessionId]: updatedSession }));
+        // --- Handle Insufficient Points ---
+        if (cost > 0 && userPoints < cost) {
+            const noPointsMessage: Message = { id: Date.now().toString(), role: 'model', content: t('no_points_chat_message') };
+            const updater = (s: ChatSession | null) => s ? { ...s, messages: [...s.messages, noPointsMessage] } : null;
+            if (isTempChat) setTemporarySession(updater);
+            else setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
+            onNoPoints();
+            return;
+        }
 
-            setIsLoading(true);
-            const aiResponseId = (Date.now() + 1).toString();
-            const aiPlaceholder: Message = { id: aiResponseId, role: 'model', content: t('generating_image_for', imagePrompt) };
-            
-            if (isTempChat) setTemporarySession(s => s ? { ...s, messages: [...s.messages, aiPlaceholder] } : null);
-            else setSessions(s => ({ ...s, [sessionId]: { ...s[sessionId], messages: [...s[sessionId].messages, aiPlaceholder] } }));
+        // --- Deduct Points ---
+        if (cost > 0 && !deductPoints(cost)) {
+            return; // Should not happen if check above is correct, but as a safeguard.
+        }
+        
+        // --- Add User Message to UI ---
+        const userMessageParts: Part[] = [];
+        let userMessageUI: Partial<Message> = { content: prompt };
 
-            try {
+        let fullPromptForApi = prompt;
+        if (filePreview.isOpen && (filePreview.type === 'text' || filePreview.type === 'table')) {
+            let fileContext = filePreview.type === 'text' 
+                ? (filePreview.content as string)
+                : (filePreview.content as string[][]).map(row => row.join(',')).join('\n');
+            fullPromptForApi = t('prompt_with_file_context', fileContext, prompt);
+            userMessageUI.filePreview = { name: filePreview.name, type: filePreview.type };
+        }
+        userMessageParts.push({ text: fullPromptForApi });
+
+        if (uploadedFile && uploadedFile.type.startsWith('image/')) {
+            const base64Data = await fileToBase64(uploadedFile);
+            userMessageParts.push({ inlineData: { mimeType: uploadedFile.type, data: base64Data } });
+            userMessageUI.images = [filePreview.url!];
+        }
+
+        const userMessage: Message = { id: Date.now().toString(), role: 'user', ...userMessageUI, content: prompt };
+        
+        closeFilePreview();
+
+        const isNewChat = activeSession.messages.length <= 1;
+        const newTitle = isNewChat ? (activeSession.toolId ? customTools.find(t=>t.id === activeSession.toolId)?.name : prompt.substring(0, 30) + '...') : activeSession.title;
+        const updatedSessionWithUserMessage = { ...activeSession, messages: [...activeSession.messages, userMessage], title: newTitle || activeSession.title };
+        
+        if (isTempChat) {
+            setTemporarySession(updatedSessionWithUserMessage);
+        } else {
+            setSessions(s => ({ ...s, [sessionId]: updatedSessionWithUserMessage }));
+        }
+
+        setIsLoading(true);
+
+        // --- Add AI Placeholder & Call API ---
+        const aiResponseId = (Date.now() + 1).toString();
+        const aiMessagePlaceholder: Message = { id: aiResponseId, role: 'model', content: '...' };
+        
+        if (isTempChat) {
+            setTemporarySession(s => s ? { ...s, messages: [...s.messages, aiMessagePlaceholder] } : null);
+        } else {
+            setSessions(s => ({ ...s, [sessionId]: { ...s[sessionId], messages: [...s[sessionId].messages, aiMessagePlaceholder] } }));
+        }
+        
+        // --- Special Handling for /image command ---
+        if (lowerPrompt.startsWith('/image ')) {
+             try {
+                const imagePrompt = prompt.replace(/\/image\s+/i, '').trim();
                 const enhancedPrompt = await enhancePromptForImage(imagePrompt, 'cinematic');
-                const generatedUrls = await generateImageService(enhancedPrompt, '1:1', 1);
+                const generatedUrls = await generateImage(enhancedPrompt, '1:1', 1);
 
-                const newHistoryItem: ImageHistoryItem = {
-                    id: Date.now().toString(),
-                    urls: generatedUrls,
-                    prompt: imagePrompt,
-                    enhancedPrompt: enhancedPrompt,
-                    model: 'gemini',
-                    style: 'cinematic',
-                    aspectRatio: '1:1',
-                    timestamp: Date.now()
-                };
-                onImagesGenerated(newHistoryItem);
+                const newHistoryItem: ImageHistoryItem = { id: Date.now().toString(), urls: generatedUrls, prompt: imagePrompt, enhancedPrompt, model: 'gemini', style: 'cinematic', aspectRatio: '1:1', timestamp: Date.now() };
+                onImageGenerated(newHistoryItem);
 
                 const aiFinalMessage: Message = { id: aiResponseId, role: 'model', content: t('image_generated_for', imagePrompt), images: generatedUrls };
-                
                 const updater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? aiFinalMessage : m) } : null;
-
                 if (isTempChat) setTemporarySession(updater);
                 else setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
 
@@ -2136,70 +2574,15 @@ const ChatView: React.FC<{
             return;
         }
 
-
-        // --- Regular Chat Message ---
-        const userMessageParts: Part[] = [];
-        let userMessageUI: Partial<Message> = { content: prompt };
-
-        let fullPrompt = prompt;
-        if (filePreview.isOpen && (filePreview.type === 'text' || filePreview.type === 'table')) {
-            let fileContext = filePreview.type === 'text' 
-                ? (filePreview.content as string)
-                : (filePreview.content as string[][]).map(row => row.join(',')).join('\n');
-            fullPrompt = t('prompt_with_file_context', fileContext, prompt);
-            userMessageUI.filePreview = { name: filePreview.name, type: filePreview.type };
-        }
-        userMessageParts.push({ text: fullPrompt });
-
-        if (uploadedFile && uploadedFile.type.startsWith('image/')) {
-            const base64Data = await fileToBase64(uploadedFile);
-            userMessageParts.push({ inlineData: { mimeType: uploadedFile.type, data: base64Data } });
-            userMessageUI.images = [filePreview.url!];
-        }
-
-        const userMessage: Message = { id: Date.now().toString(), role: 'user', ...userMessageUI, content: prompt };
-        
-        closeFilePreview();
-
-        const isNewChat = activeSession.messages.length <= 1;
-
-        const updatedMessages = [...activeSession.messages, userMessage];
-        const newTitle = isNewChat ? (activeSession.toolId ? customTools.find(t=>t.id === activeSession.toolId)?.name : prompt.substring(0, 30) + '...') : activeSession.title;
-        const updatedSession = { ...activeSession, messages: updatedMessages, title: newTitle || activeSession.title };
-        
-        if (isTempChat) {
-            setTemporarySession(updatedSession);
-        } else {
-            setSessions(s => ({ ...s, [sessionId]: updatedSession }));
-        }
-
-        setIsLoading(true);
-
-        const aiResponseId = (Date.now() + 1).toString();
-        const aiMessagePlaceholder: Message = { id: aiResponseId, role: 'model', content: '...' };
-        
-        if (isTempChat) {
-            setTemporarySession(s => s ? { ...s, messages: [...s.messages, aiMessagePlaceholder] } : null);
-        } else {
-            setSessions(s => ({ ...s, [sessionId]: { ...s[sessionId], messages: [...s[sessionId].messages, aiMessagePlaceholder] } }));
-        }
-        
-        const history = updatedMessages;
+        // --- Regular Chat and other Commands ---
+        const history = updatedSessionWithUserMessage.messages;
         const activeTool = customTools.find(t => t.id === activeSession?.toolId);
         
         let fullResponse = '';
         try {
              const stream = await getAiResponseStream(
-                userMessageParts, 
-                history, 
-                activeSession.settings, 
-                userProfile, 
-                generalMemories, 
-                activeTool,
-                sessions,
-                savedMemories,
-                activeSession.knowledgeFiles || [],
-                language
+                userMessageParts, history, activeSession.settings, userProfile, generalMemories, 
+                activeTool, sessions, savedMemories, activeSession.knowledgeFiles || [], language
             );
 
             let sources: any[] = [];
@@ -2207,72 +2590,37 @@ const ChatView: React.FC<{
                 fullResponse += chunk.text;
                 if (chunk.sources) sources = chunk.sources;
 
-                const updater = (s: ChatSession | null) => {
-                    if (!s) return null;
-                    const currentMessages = s.messages;
-                    const updatedMessages = currentMessages.map(m => m.id === aiResponseId ? { ...m, content: fullResponse, sources } : m);
-                    return { ...s, messages: updatedMessages };
-                };
+                const updater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? { ...m, content: fullResponse, sources } : m) } : null;
 
-                if (isTempChat) {
-                    setTemporarySession(updater);
-                } else {
-                    setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
-                }
+                if (isTempChat) setTemporarySession(updater);
+                else setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
             }
             
             let finalContent: string | RichContent = fullResponse;
             try {
-                // To prevent parsing malformed JSON during streaming, we parse only at the end.
                 const potentialJson = fullResponse.substring(fullResponse.indexOf('{'), fullResponse.lastIndexOf('}') + 1);
                 const parsed = JSON.parse(potentialJson);
-                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project', 'study_explanation', 'study_review', 'study_quiz'].includes(parsed.type)) {
-                    if (parsed.type === 'resume') {
-                         finalContent = { ...parsed, template: 'elegant' }; // Set default template for new resumes
-                    } else {
-                         finalContent = parsed;
-                    }
+                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project', 'study_explanation', 'study_review', 'study_quiz', 'youtube_search_results', 'article_review'].includes(parsed.type)) {
+                    finalContent = (parsed.type === 'resume') ? { ...parsed, template: 'elegant' } : parsed;
                 }
-            } catch (e) { /* Not a JSON, treat as text */ }
+            } catch (e) { /* Not JSON, treat as text */ }
             
-            const finalUpdater = (s: ChatSession | null) => {
-                 if (!s) return null;
-                const currentMessages = s.messages;
-                const updatedMessages = currentMessages.map(m => m.id === aiResponseId ? { ...m, content: finalContent, sources } : m);
-                return { ...s, messages: updatedMessages };
-            }
-
-            if (isTempChat) {
-                setTemporarySession(finalUpdater);
-            } else {
-                setSessions(s => ({ ...s, [sessionId]: finalUpdater(s[sessionId])! }));
-            }
-
+            const finalUpdater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? { ...m, content: finalContent, sources } : m) } : null;
+            if (isTempChat) setTemporarySession(finalUpdater);
+            else setSessions(s => ({ ...s, [sessionId]: finalUpdater(s[sessionId])! }));
 
         } catch (error) {
             console.error("Error generating response:", error);
             const errorMessage: Message = { id: aiResponseId, role: 'model', content: t('error_general_response') };
-            
-            const errorUpdater = (s: ChatSession | null) => {
-                if (!s) return null;
-                const currentMessages = s.messages;
-                const updatedMessages = currentMessages.map(m => m.id === aiResponseId ? errorMessage : m);
-                return { ...s, messages: updatedMessages };
-            }
-
-            if (isTempChat) {
-                setTemporarySession(errorUpdater);
-            } else {
-                setSessions(s => ({ ...s, [sessionId]: errorUpdater(s[sessionId])! }));
-            }
-
+            const errorUpdater = (s: ChatSession | null) => s ? { ...s, messages: s.messages.map(m => m.id === aiResponseId ? errorMessage : m) } : null;
+            if (isTempChat) setTemporarySession(errorUpdater);
+            else setSessions(s => ({ ...s, [sessionId]: errorUpdater(s[sessionId])! }));
         } finally {
             setIsLoading(false);
             if (!activeTool && fullResponse && typeof fullResponse === 'string') {
                 const info = await extractUserInfo(prompt, fullResponse);
                  if (Object.values(info).some(v => (Array.isArray(v) ? v.length > 0 : !!v))) {
-                    const newProfile = { ...userProfile, ...info };
-                    onUpdateUserProfile(newProfile);
+                    onUpdateUserProfile(info);
                 }
             }
         }
@@ -2299,7 +2647,6 @@ const ChatView: React.FC<{
             } else if (file.type.startsWith('text/')) {
                 content = await parseTextFile(file);
             } else {
-                // Or show an error to the user
                 console.warn("Unsupported file type for knowledge base");
                 return;
             }
@@ -2325,9 +2672,8 @@ const ChatView: React.FC<{
         }
     }
     
-    const handleUpdateMessageContent = (messageId: string, newContent: RichContent) => {
+    const handleUpdateMessageContent = (messageId: string, newContent: RichContent | string) => {
         if (!activeId) return;
-
         const updater = (session: ChatSession | null) => {
             if (!session) return null;
             const updatedMessages = session.messages.map(msg => 
@@ -2354,6 +2700,7 @@ const ChatView: React.FC<{
 
     return (
         <div className="flex flex-1 h-full overflow-hidden">
+             <YouTubePlayerModal videoId={playingVideoId} onClose={handleCloseVideo} />
              <CodePreviewPanel isOpen={codePreview.isOpen} code={codePreview.code} onClose={handleCloseCodePreview} />
              <FilePreviewPanel preview={filePreview} onClose={closeFilePreview} />
             <div className="flex-1 flex flex-col relative overflow-hidden">
@@ -2374,6 +2721,9 @@ const ChatView: React.FC<{
                         onUpdateMessageContent={handleUpdateMessageContent}
                         onToggleDrawer={onToggleDrawer}
                         onStudyFollowUp={handleStudyFollowUp}
+                        onPlayVideo={handlePlayVideo}
+                        userPoints={userPoints}
+                        onNoPoints={onNoPoints}
                     />
                  )}
                  <ChatInputBar 
@@ -2416,6 +2766,83 @@ const Modal: React.FC<{ children: React.ReactNode, title: string, onClose: () =>
     );
 };
 
+const SubscriptionModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const { t } = useLanguage();
+
+    return (
+        <Modal title={t('subscribe_title')} onClose={onClose} size="lg">
+            <div className="space-y-6 text-center">
+                <p className="text-lg">{t('subscribe_description')}</p>
+                <div className="my-4">
+                    <span className="text-5xl font-bold bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">$29</span>
+                    <span className="text-xl text-gray-400">/ {t('subscribe_month')}</span>
+                </div>
+
+                <div className="text-right space-y-4">
+                    <div>
+                        <h3 className="font-bold text-lg mb-2">{t('subscribe_vodafone_cash_title')}</h3>
+                        <p>{t('subscribe_vodafone_cash_desc')}</p>
+                        <div className="flex items-center justify-center mt-2 p-3 bg-gray-900/50 rounded-lg">
+                            <span className="font-mono text-xl text-purple-300 tracking-widest">01099113383</span>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-lg mb-2">{t('subscribe_instapay_title')}</h3>
+                        <p>{t('subscribe_instapay_desc')}</p>
+                         <div className="flex items-center justify-center mt-2 p-3 bg-gray-900/50 rounded-lg">
+                            <span className="font-mono text-xl text-purple-300">m.ibrahim.abdullah.m@gmail.com</span>
+                        </div>
+                    </div>
+                </div>
+
+                <p className="text-sm text-gray-400 pt-4 border-t border-purple-500/20">{t('subscribe_confirmation')}</p>
+            </div>
+        </Modal>
+    );
+};
+
+const YouTubePlayerModal: React.FC<{ videoId: string | null; onClose: () => void; }> = ({ videoId, onClose }) => {
+    const { t } = useLanguage();
+    const [embedUrl, setEmbedUrl] = useState('');
+
+    useEffect(() => {
+        if (videoId) {
+            // Construct the URL on the client-side to safely access window.location
+            const origin = window.location.origin;
+            const url = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&origin=${encodeURIComponent(origin)}`;
+            setEmbedUrl(url);
+        } else {
+            setEmbedUrl(''); // Clear URL when modal closes
+        }
+    }, [videoId]);
+
+    if (!videoId) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/80 z-[110] flex items-center justify-center p-0 md:p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
+            <div className="bg-black w-full h-auto md:h-full max-h-[85vh] max-w-4xl aspect-video relative shadow-2xl shadow-purple-500/20" onClick={e => e.stopPropagation()}>
+                <button onClick={onClose} className="absolute -top-3 -right-3 md:-top-4 md:-right-4 text-white bg-purple-600 rounded-full w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-xl z-20 hover:bg-purple-500 transition-colors" title={t('close')}>
+                    <CloseIcon />
+                </button>
+                 {embedUrl ? (
+                     <iframe
+                        className="w-full h-full"
+                        src={embedUrl}
+                        title="YouTube video player"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                    ></iframe>
+                 ) : (
+                    <div className="flex items-center justify-center h-full">
+                        <div className="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                 )}
+            </div>
+        </div>
+    );
+};
+
 const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const { t } = useLanguage();
     const [currentView, setCurrentView] = useState<View>(View.CHAT);
@@ -2427,6 +2854,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [savedMemories, setSavedMemories] = useState<Message[]>([]);
     const [generalMemories, setGeneralMemories] = useState<string[]>([]);
     const [imageHistory, setImageHistory] = useState<ImageHistoryItem[]>([]);
+    const [videoHistory, setVideoHistory] = useState<VideoHistoryItem[]>([]);
     
     const [sessions, setSessions] = useState<Record<string, ChatSession>>({});
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -2434,61 +2862,89 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [temporarySession, setTemporarySession] = useState<ChatSession | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     
-    // Load data from local storage on mount
+    const [userPoints, setUserPoints] = useState(300);
+    const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+
+    // Load data and manage points on mount
     useEffect(() => {
-        const loadData = () => {
-            try {
-                const savedSettings = localStorage.getItem('nova-global-settings');
-                if (savedSettings) setGlobalSettings(JSON.parse(savedSettings));
+        // Points Management
+        const savedPointsStr = localStorage.getItem('nova-user-points');
+        const savedResetTimeStr = localStorage.getItem('nova-points-reset-time');
+        const now = Date.now();
+        let needsReset = true;
 
-                const savedTools = localStorage.getItem('nova-custom-tools');
-                if (savedTools) {
-                    setCustomTools(JSON.parse(savedTools));
-                } else {
-                    // Create a default tool if none exist
-                    const defaultTool: CustomTool = {
-                        id: 'default-study-buddy',
-                        name: t('study_buddy_tool_name'),
-                        icon: '🎓',
-                        prompt: t('study_buddy_tool_prompt'),
-                    };
-                    setCustomTools([defaultTool]);
-                    localStorage.setItem('nova-custom-tools', JSON.stringify([defaultTool]));
-                }
-
-                const savedProfile = localStorage.getItem('nova-user-profile');
-                if (savedProfile) setUserProfile(JSON.parse(savedProfile));
-
-                const savedMems = localStorage.getItem('nova-saved-memories');
-                if (savedMems) setSavedMemories(JSON.parse(savedMems));
-
-                const savedGeneralMems = localStorage.getItem('nova-general-memories');
-                if (savedGeneralMems) setGeneralMemories(JSON.parse(savedGeneralMems));
-                
-                const savedSessions = localStorage.getItem('nova-chat-sessions');
-                const savedActiveId = localStorage.getItem('nova-active-chat-id');
-                if (savedSessions) {
-                    const parsedSessions = JSON.parse(savedSessions);
-                    if (Object.keys(parsedSessions).length > 0) {
-                        setSessions(parsedSessions);
-                        if (savedActiveId && parsedSessions[savedActiveId]) {
-                            setActiveId(savedActiveId);
-                        } else {
-                           const latestSessionId = Object.keys(parsedSessions).sort((a,b) => b.localeCompare(a))[0];
-                           setActiveId(latestSessionId);
-                        }
-                    }
-                }
-                
-                const savedImageHistory = localStorage.getItem('nova-image-history');
-                if(savedImageHistory) setImageHistory(JSON.parse(savedImageHistory));
-
-            } catch (e) {
-                console.error("Failed to load data from storage", e);
+        if (savedResetTimeStr) {
+            const lastReset = parseInt(savedResetTimeStr, 10);
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            
+            if (lastReset >= startOfToday.getTime()) {
+                needsReset = false;
             }
-        };
-        loadData();
+        }
+
+        if (needsReset) {
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            setUserPoints(300);
+            localStorage.setItem('nova-user-points', '300');
+            localStorage.setItem('nova-points-reset-time', startOfToday.getTime().toString());
+        } else {
+            setUserPoints(savedPointsStr ? parseInt(savedPointsStr, 10) : 300);
+        }
+
+        // Load other data from storage
+        try {
+            const savedSettings = localStorage.getItem('nova-global-settings');
+            if (savedSettings) setGlobalSettings(JSON.parse(savedSettings));
+
+            const savedTools = localStorage.getItem('nova-custom-tools');
+            if (savedTools) {
+                setCustomTools(JSON.parse(savedTools));
+            } else {
+                const defaultTool: CustomTool = { id: 'default-study-buddy', name: t('study_buddy_tool_name'), icon: '🎓', prompt: t('study_buddy_tool_prompt') };
+                setCustomTools([defaultTool]);
+                localStorage.setItem('nova-custom-tools', JSON.stringify([defaultTool]));
+            }
+
+            const savedProfile = localStorage.getItem('nova-user-profile');
+            if (savedProfile) setUserProfile(JSON.parse(savedProfile));
+            const savedMems = localStorage.getItem('nova-saved-memories');
+            if (savedMems) setSavedMemories(JSON.parse(savedMems));
+            const savedGeneralMems = localStorage.getItem('nova-general-memories');
+            if (savedGeneralMems) setGeneralMemories(JSON.parse(savedGeneralMems));
+            const savedSessions = localStorage.getItem('nova-chat-sessions');
+            const savedActiveId = localStorage.getItem('nova-active-chat-id');
+            if (savedSessions) {
+                const parsedSessions = JSON.parse(savedSessions);
+                if (Object.keys(parsedSessions).length > 0) {
+                    setSessions(parsedSessions);
+                    if (savedActiveId && parsedSessions[savedActiveId]) setActiveId(savedActiveId);
+                    else setActiveId(Object.keys(parsedSessions).sort((a, b) => b.localeCompare(a))[0]);
+                }
+            }
+            const savedImageHistory = localStorage.getItem('nova-image-history');
+            if (savedImageHistory) setImageHistory(JSON.parse(savedImageHistory));
+            const savedVideoHistory = localStorage.getItem('nova-video-history');
+            if (savedVideoHistory) setVideoHistory(JSON.parse(savedVideoHistory));
+        } catch (e) {
+            console.error("Failed to load data from storage", e);
+        }
     }, [t]);
+
+    const deductPoints = (amount: number): boolean => {
+        if (userPoints >= amount) {
+            const newPoints = userPoints - amount;
+            setUserPoints(newPoints);
+            localStorage.setItem('nova-user-points', newPoints.toString());
+            return true;
+        }
+        return false;
+    };
+    
+    const handleNoPoints = () => {
+        setShowSubscriptionModal(true);
+    };
 
     // Save chat sessions to local storage
     useEffect(() => {
@@ -2516,6 +2972,15 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             console.error("Failed to save image history to storage", e);
         }
     }, [imageHistory]);
+    
+    // Save video history to local storage
+    useEffect(() => {
+        try {
+            localStorage.setItem('nova-video-history', JSON.stringify(videoHistory));
+        } catch(e) {
+            console.error("Failed to save video history to storage", e);
+        }
+    }, [videoHistory]);
 
     // Handlers to update state and local storage
     const handleUpdateSettings = (newSettings: GlobalSettings) => {
@@ -2551,8 +3016,12 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         localStorage.setItem('nova-general-memories', JSON.stringify(memories));
     };
     
-    const handleImagesGenerated = (item: ImageHistoryItem) => {
+    const handleImageGenerated = (item: ImageHistoryItem) => {
         setImageHistory(prev => [item, ...prev]);
+    };
+    
+    const handleVideoGenerated = (item: VideoHistoryItem) => {
+        setVideoHistory(prev => [item, ...prev]);
     };
 
     const handleDeleteSession = (id: string) => {
@@ -2634,7 +3103,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         customTools={customTools}
                         onUpdateUserProfile={handleUpdateProfile}
                         onSaveMemory={handleSaveMemory}
-                        onImagesGenerated={handleImagesGenerated}
+                        onImageGenerated={handleImageGenerated}
                         sessions={sessions}
                         setSessions={setSessions}
                         activeId={activeId}
@@ -2644,13 +3113,21 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         temporarySession={temporarySession}
                         setTemporarySession={setTemporarySession}
                         onToggleDrawer={() => setIsDrawerOpen(p => !p)}
+                        deductPoints={deductPoints}
+                        userPoints={userPoints}
+                        onNoPoints={handleNoPoints}
                     />
                  );
-            case View.IMAGE_STUDIO:
+            case View.CREATIVE_STUDIO:
                 return (
-                    <ImageStudioView 
+                    <CreativeStudioView 
                         imageHistory={imageHistory}
-                        onImagesGenerated={handleImagesGenerated}
+                        videoHistory={videoHistory}
+                        onImageGenerated={handleImageGenerated}
+                        onVideoGenerated={handleVideoGenerated}
+                        userPoints={userPoints}
+                        deductPoints={deductPoints}
+                        onNoPoints={handleNoPoints}
                     />
                 );
             default:
@@ -2664,7 +3141,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         customTools={customTools}
                         onUpdateUserProfile={handleUpdateProfile}
                         onSaveMemory={handleSaveMemory}
-                        onImagesGenerated={handleImagesGenerated}
+                        onImageGenerated={handleImageGenerated}
                         sessions={sessions}
                         setSessions={setSessions}
                         activeId={activeId}
@@ -2674,6 +3151,9 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         temporarySession={temporarySession}
                         setTemporarySession={setTemporarySession}
                         onToggleDrawer={() => setIsDrawerOpen(p => !p)}
+                        deductPoints={deductPoints}
+                        userPoints={userPoints}
+                        onNoPoints={handleNoPoints}
                     />
                 );
         }
@@ -2707,12 +3187,13 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
     return (
         <div className="w-full h-full flex flex-row">
-            <div className="flex-1 flex flex-col overflow-hidden relative">
-                <button onClick={() => setIsSidebarCollapsed(p => !p)} className="absolute top-1/2 -translate-y-1/2 left-4 w-7 h-7 bg-[#0c0c1f] border border-purple-500/30 rounded-full hidden lg:flex items-center justify-center text-gray-400 hover:bg-purple-500/20 z-20">
+            <div className="flex-1 flex flex-col overflow-y-auto md:overflow-hidden relative">
+                <button onClick={() => setIsSidebarCollapsed(p => !p)} className="absolute top-1/2 -translate-y-1/2 left-4 w-7 h-7 bg-sidebar-bg border border-white/10 rounded-full hidden lg:flex items-center justify-center text-gray-400 hover:bg-white/10 z-20">
                     {isSidebarCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
                 </button>
                 {renderMainView()}
                 {renderActiveModal()}
+                {showSubscriptionModal && <SubscriptionModal onClose={() => setShowSubscriptionModal(false)} />}
             </div>
             {isDrawerOpen && <div className="lg:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setIsDrawerOpen(false)} />}
             <MainSidebar
@@ -2729,6 +3210,7 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                 onLogout={onLogout}
                 isDrawerOpen={isDrawerOpen}
                 onCloseDrawer={() => setIsDrawerOpen(false)}
+                userPoints={userPoints}
             />
         </div>
     );
@@ -2811,52 +3293,85 @@ const Hero: React.FC<{ onCTAClick: () => void }> = ({ onCTAClick }) => {
     );
 };
 
-const DetailedFeatures: React.FC = () => {
+const CapabilitiesSection: React.FC = () => {
     const { t } = useLanguage();
-    const featureGroups = {
-        [t('features_group1_title')]: [
-            { icon: <i className="fas fa-file-import"></i>, title: t('feature1_title'), description: t('feature1_desc') },
-            { icon: <i className="fas fa-id-card"></i>, title: t('feature2_title'), description: t('feature2_desc') },
-            { icon: <i className="fas fa-chart-pie"></i>, title: t('feature3_title'), description: t('feature3_desc') },
-            { icon: <i className="fas fa-code"></i>, title: t('feature4_title'), description: t('feature4_desc') },
-            { icon: <i className="fas fa-graduation-cap"></i>, title: t('feature5_title'), description: t('feature5_desc') },
-        ],
-        [t('features_group2_title')]: [
-            { icon: <i className="fas fa-palette"></i>, title: t('feature6_title'), description: t('feature6_desc') },
-            { icon: <i className="fas fa-comments"></i>, title: t('feature7_title'), description: t('feature7_desc') },
-            { icon: <i className="fas fa-magic"></i>, title: t('feature8_title'), description: t('feature8_desc') },
-            { icon: <i className="fas fa-feather-alt"></i>, title: t('feature9_title'), description: t('feature9_desc') },
-        ],
-        [t('features_group3_title')]: [
-            { icon: <SearchIcon />, title: t('feature10_title'), description: t('feature10_desc') },
-            { icon: <BrainIcon />, title: t('feature11_title'), description: t('feature11_desc') },
-            { icon: <ToolIcon />, title: t('feature12_title'), description: t('feature12_desc') },
-        ],
+    const [activeTab, setActiveTab] = useState('analysis');
+
+    const featureCategories: { [key: string]: { title: string, icon: JSX.Element, features: {icon: JSX.Element, title: string, description: string}[] } } = {
+        analysis: {
+            title: t('capabilities_tab_analysis'),
+            icon: <i className="fas fa-chart-line mr-2"></i>,
+            features: [
+                { icon: <i className="fas fa-file-import"></i>, title: t('cap_analysis_f1_title'), description: t('cap_analysis_f1_desc') },
+                { icon: <i className="fas fa-id-card"></i>, title: t('cap_analysis_f2_title'), description: t('cap_analysis_f2_desc') },
+                { icon: <i className="fas fa-chart-pie"></i>, title: t('cap_analysis_f3_title'), description: t('cap_analysis_f3_desc') },
+                { icon: <i className="fas fa-graduation-cap"></i>, title: t('cap_analysis_f4_title'), description: t('cap_analysis_f4_desc') },
+            ]
+        },
+        creative: {
+            title: t('capabilities_tab_creative'),
+            icon: <i className="fas fa-palette mr-2"></i>,
+            features: [
+                { icon: <i className="fas fa-image"></i>, title: t('cap_creative_f1_title'), description: t('cap_creative_f1_desc') },
+                { icon: <i className="fas fa-magic"></i>, title: t('cap_creative_f2_title'), description: t('cap_creative_f2_desc') },
+                { icon: <i className="fas fa-comments"></i>, title: t('cap_creative_f3_title'), description: t('cap_creative_f3_desc') },
+            ]
+        },
+        coding: {
+            title: t('capabilities_tab_coding'),
+            icon: <i className="fas fa-code mr-2"></i>,
+            features: [
+                { icon: <i className="fas fa-cogs"></i>, title: t('cap_coding_f1_title'), description: t('cap_coding_f1_desc') },
+                { icon: <i className="fas fa-file-code"></i>, title: t('cap_coding_f2_title'), description: t('cap_coding_f2_desc') },
+                { icon: <i className="fas fa-eye"></i>, title: t('cap_coding_f3_title'), description: t('cap_coding_f3_desc') },
+            ]
+        },
+        advanced: {
+            title: t('capabilities_tab_advanced'),
+            icon: <i className="fas fa-star mr-2"></i>,
+            features: [
+                { icon: <i className="fas fa-search"></i>, title: t('cap_advanced_f1_title'), description: t('cap_advanced_f1_desc') },
+                { icon: <i className="fab fa-youtube"></i>, title: t('cap_advanced_f4_title'), description: t('cap_advanced_f4_desc') },
+                { icon: <i className="fas fa-brain"></i>, title: t('cap_advanced_f2_title'), description: t('cap_advanced_f2_desc') },
+                { icon: <i className="fas fa-tools"></i>, title: t('cap_advanced_f3_title'), description: t('cap_advanced_f3_desc') },
+            ]
+        },
     };
 
     return (
         <section className="py-20 px-[5%] bg-[#050510]" id="features">
             <div className="max-w-7xl mx-auto text-center">
-                <h2 className="text-3xl md:text-4xl font-bold mb-4">{t('features_main_title')}</h2>
-                <p className="text-lg text-gray-400 mb-12">{t('features_main_subtitle')}</p>
-                {Object.entries(featureGroups).map(([groupTitle, features]) => (
-                    <div key={groupTitle} className="mb-16">
-                        <h3 className="text-2xl md:text-3xl font-bold mb-8 text-purple-300">{groupTitle}</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                            {features.map((feature, i) => (
-                                <div key={i} className="feature-card h-full">
-                                    <div className="text-4xl text-purple-400 mb-4">{feature.icon}</div>
-                                    <h4 className="text-xl font-bold mb-2">{feature.title}</h4>
-                                    <p className="text-gray-300 text-sm">{feature.description}</p>
-                                </div>
-                            ))}
+                <h2 className="text-3xl md:text-4xl font-bold mb-4">{t('capabilities_main_title')}</h2>
+                <p className="text-lg text-gray-400 mb-12">{t('capabilities_main_subtitle')}</p>
+
+                <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-12">
+                    {Object.entries(featureCategories).map(([key, { title, icon }]) => (
+                        <button 
+                            key={key} 
+                            onClick={() => setActiveTab(key)}
+                            className={`capability-tab ${activeTab === key ? 'active' : ''}`}
+                        >
+                            {icon} {title}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-right">
+                    {featureCategories[activeTab].features.map((feature, index) => (
+                        <div key={index} className="feature-card h-full animate-fade-in">
+                            <div className="flex items-center gap-4 mb-4">
+                                <span className="text-3xl text-purple-400">{feature.icon}</span>
+                                <h4 className="text-xl font-bold">{feature.title}</h4>
+                            </div>
+                            <p className="text-gray-300 text-sm leading-relaxed">{feature.description}</p>
                         </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
         </section>
     );
 };
+
 
 const AboutSection: React.FC = () => {
     const { t } = useLanguage();
@@ -2967,7 +3482,7 @@ const LandingPage: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess 
             <LandingPageHeader onAuthClick={handleAuthNav} onNavClick={handleNavClick} />
             <main>
                 <Hero onCTAClick={() => handleAuthNav('signup')} />
-                <DetailedFeatures />
+                <CapabilitiesSection />
                 <AboutSection />
             </main>
             <Footer />
@@ -3016,8 +3531,23 @@ const App: React.FC = () => {
         <LanguageProvider>
             <AppContent />
             <style>{`
-                :root { --custom-scroll-track: #0a0a1a; --custom-scroll-thumb: #8a2be2; }
+                :root {
+                    --app-bg: #131314;
+                    --sidebar-bg: rgba(22, 23, 26, 0.8);
+                    --input-bar-bg: #1e1f20;
+                    --model-message-bg: #2d2e30;
+                    --blue-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+                }
                 html { scroll-behavior: smooth; }
+                body {
+                    background-color: var(--app-bg);
+                    font-family: 'Cairo', sans-serif;
+                }
+                .bg-blue-gradient { background: var(--blue-gradient); }
+                .bg-sidebar-bg { background-color: var(--sidebar-bg); }
+                .bg-input-bar-bg { background-color: var(--input-bar-bg); }
+                .bg-model-message-bg { background-color: var(--model-message-bg); }
+
                 .prose { color: #f0f0ff; }
                 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { color: #f0f0ff; }
                 .btn-primary {
@@ -3034,7 +3564,7 @@ const App: React.FC = () => {
                 .nav-link:hover { color: #00bfff; }
                 .nav-link::after { content: ''; position: absolute; bottom: 0; left: 0; width: 0; height: 2px; background: linear-gradient(135deg, #8a2be2, #00bfff); transition: width 0.3s ease; }
                 .nav-link:hover::after { width: 100%; }
-                .feature-card { display: flex; flex-direction: column; background: rgba(20, 20, 40, 0.6); border-radius: 1rem; padding: 2rem; text-align: center; transition: all 0.3s ease; border: 1px solid rgba(138, 43, 226, 0.2); }
+                .feature-card { display: flex; flex-direction: column; background: rgba(20, 20, 40, 0.6); border-radius: 1rem; padding: 2rem; text-align: right; transition: all 0.3s ease; border: 1px solid rgba(138, 43, 226, 0.2); }
                 .feature-card:hover { transform: translateY(-10px); box-shadow: 0 10px 30px rgba(138, 43, 226, 0.3); border-color: rgba(138, 43, 226, 0.5); }
                 .social-link { font-size: 1.75rem; color: #a3a3c2; transition: all 0.3s ease; }
                 .social-link:hover { color: #00bfff; transform: scale(1.1); }
@@ -3043,7 +3573,7 @@ const App: React.FC = () => {
                 .modal-input { width: 100%; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #8a2be2; background: #050510; color: white; outline: none; transition: all 0.2s; }
                 .modal-input:focus { box-shadow: 0 0 0 2px #00bfff; }
                 @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-                .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+                .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
                 @keyframes fade-in-right { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
                 .animate-fade-in-right { animation: fade-in-right 0.3s ease-out forwards; }
                 .setting-card { background: #0a0a1a; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid rgba(138,43,226,0.2); }
@@ -3055,45 +3585,103 @@ const App: React.FC = () => {
                 .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background-color: white; border-radius: 9999px; transition: transform 0.2s; }
                 .toggle-switch:checked { background-color: #8a2be2; }
                 .toggle-switch:checked::after { transform: translateX(20px); }
+                .toggle-switch:disabled { opacity: 0.5; cursor: not-allowed; }
                 .suggestion-card { text-align: right; background-color: rgba(30, 30, 62, 0.5); border: 1px solid rgba(138, 43, 226, 0.2); padding: 1rem; border-radius: 0.75rem; transition: all 0.2s ease-in-out; }
                 .suggestion-card:hover { background-color: rgba(45, 45, 80, 0.8); border-color: #8a2be2; transform: translateY(-4px); }
+                .capability-tab {
+                    padding: 0.6rem 1.2rem;
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    border-radius: 30px;
+                    border: 1px solid rgba(138, 43, 226, 0.3);
+                    background-color: rgba(30, 30, 60, 0.5);
+                    color: #c0c0ff;
+                    transition: all 0.3s ease;
+                    display: inline-flex;
+                    align-items: center;
+                }
+                .capability-tab:hover {
+                    background-color: rgba(138, 43, 226, 0.2);
+                    color: white;
+                }
+                .capability-tab.active {
+                    background: linear-gradient(135deg, #8a2be2, #00bfff);
+                    color: white;
+                    border-color: transparent;
+                    box-shadow: 0 0 15px rgba(138, 43, 226, 0.5);
+                }
 
-                /* Canvas View Styles */
-                .canvas-view {
+                /* PDF Export Styles */
+                .pdf-export-active {
+                    background-color: #ffffff !important;
+                    color: #000000 !important;
+                    font-family: 'Cairo', sans-serif !important;
+                }
+                .pdf-export-active, .pdf-export-active * {
+                    color: #000000 !important;
+                    background-color: transparent !important;
+                    border-color: #cccccc !important;
+                    text-shadow: none !important;
+                }
+                .pdf-export-active .report-title, .pdf-export-active .report-section-title {
+                     border-bottom-color: #333333 !important;
+                }
+                .pdf-export-active .resume-header {
+                     border-bottom-color: #333333 !important;
+                }
+                /* Ensure specific resume templates still look okay */
+                .pdf-export-active .creative-template .resume-header {
+                    background-color: #343a40 !important;
+                }
+                 .pdf-export-active .creative-template .resume-header * {
+                    color: #ffffff !important;
+                }
+
+
+                /* A4 Report View Styles */
+                .report-view-a4-container { background-color: #333; padding: 2rem; overflow-x: auto; }
+                .report-view-a4 {
                     background-color: #ffffff;
                     color: #1f2937;
-                    padding: 2rem;
-                    border-radius: 0 0 0.5rem 0.5rem;
+                    padding: 2cm;
+                    width: 21cm;
+                    min-height: 29.7cm;
+                    margin: 0 auto;
+                    box-shadow: 0 0 15px rgba(0,0,0,0.5);
                     direction: rtl;
                     text-align: right;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    font-family: 'Cairo', 'Times New Roman', serif;
                 }
-                .canvas-view [contenteditable]:focus {
+                .report-view-a4 [contenteditable]:focus {
                     outline: 2px solid #8a2be2;
                     box-shadow: 0 0 5px rgba(138, 43, 226, 0.5);
                     border-radius: 4px;
                 }
-                .canvas-title {
-                    font-size: 2.25rem;
-                    font-weight: 800;
+                .report-view-a4 .report-title {
+                    font-size: 24pt;
+                    font-weight: bold;
                     color: #111827;
-                    border-bottom: 2px solid #e5e7eb;
-                    padding-bottom: 0.75rem;
-                    margin-bottom: 1.5rem;
+                    text-align: center;
+                    border-bottom: 2px solid #333;
+                    padding-bottom: 0.5cm;
+                    margin-bottom: 1cm;
                 }
-                .canvas-section-title {
-                    font-size: 1.5rem;
-                    font-weight: 700;
-                    color: #8a2be2;
-                    margin-top: 1.75rem;
-                    margin-bottom: 0.5rem;
+                .report-view-a4 .report-section-title {
+                    font-size: 16pt;
+                    font-weight: bold;
+                    color: #333;
+                    margin-top: 1cm;
+                    margin-bottom: 0.5cm;
+                    border-bottom: 1px solid #ccc;
+                    padding-bottom: 0.2cm;
                 }
-                .canvas-section-content {
-                    font-size: 1rem;
-                    line-height: 1.75;
+                .report-view-a4 .report-section-content {
+                    font-size: 12pt;
+                    line-height: 1.6;
                     color: #374151;
                     white-space: pre-wrap;
                 }
+
                 /* --- Resume View General Styles --- */
                 .resume-control-btn {
                     background-color: rgba(255, 255, 255, 0.1);
@@ -3114,7 +3702,7 @@ const App: React.FC = () => {
                 }
                 .resume-template-btn:hover { color: white; background-color: rgba(138, 43, 226, 0.4); }
                 .resume-template-btn.active { color: white; background-color: #8a2be2; }
-                .resume-view { background-color: #fff; color: #333; overflow: hidden; }
+                .resume-view { background-color: #fff; color: #333; overflow: hidden; font-family: 'Cairo', sans-serif; }
                 .resume-view h1, .resume-view h2, .resume-view h3, .resume-view h4, .resume-view h5, .resume-view h6, .resume-view p, .resume-view li, .resume-view span, .resume-view a { font-family: inherit; }
                 .resume-section { margin-bottom: 1.25rem; }
                 .resume-section h3 { font-weight: bold; }
@@ -3129,7 +3717,7 @@ const App: React.FC = () => {
                 .resume-contact-sidebar { display: none; }
 
                 /* --- Elegant Template --- */
-                .elegant-template { font-family: 'Times New Roman', Times, serif; color: #1a202c; padding: 2.5rem; direction: rtl; text-align: right;}
+                .elegant-template { font-family: 'Cairo', 'Times New Roman', serif; color: #1a202c; padding: 2.5rem; direction: rtl; text-align: right;}
                 .elegant-template .resume-body-container { display: flex; gap: 2rem; }
                 .elegant-template .resume-main-content { flex: 2; }
                 .elegant-template .resume-sidebar { flex: 1; border-right: 1px solid #e2e8f0; padding-right: 1.5rem; }
@@ -3137,20 +3725,16 @@ const App: React.FC = () => {
                 .elegant-template .resume-header .profile-picture-container { display: none; }
                 .elegant-template .resume-header h1 { font-size: 2.75rem; font-weight: bold; letter-spacing: 2px; color: #2d3748; margin: 0; }
                 .elegant-template .resume-header h2 { font-size: 1.2rem; font-weight: normal; color: #4a5568; margin-bottom: 0.75rem; }
-                .elegant-template .resume-header .resume-contact { justify-content: center; font-family: 'Helvetica', sans-serif; font-size: 0.85rem; color: #4a5568; }
+                .elegant-template .resume-header .resume-contact { justify-content: center; font-size: 0.85rem; color: #4a5568; }
                 .elegant-template .resume-section h3 { font-size: 1.2rem; color: #2d3748; border-bottom: 1px solid #718096; padding-bottom: 0.3rem; margin-bottom: 1rem; letter-spacing: 1px; }
-                .elegant-template .resume-main-content p { font-family: 'Georgia', serif; line-height: 1.6; }
                 .elegant-template .resume-item { margin-bottom: 1.25rem; }
                 .elegant-template .resume-item h4 { font-size: 1.1rem; color: #2d3748; }
-                .elegant-template .resume-item h5, .elegant-template .resume-item h6 { font-size: 0.9rem; font-style: italic; color: #718096; font-family: 'Helvetica', sans-serif; }
-                .elegant-template .resume-item ul { font-family: 'Georgia', serif; color: #4a5568; }
-                .elegant-template .resume-sidebar .resume-contact, .elegant-template .resume-sidebar .resume-item, .elegant-template .resume-sidebar .skills-category { font-family: 'Helvetica', sans-serif; font-size: 0.9rem; }
-                .elegant-template .resume-sidebar h4 { font-size: 1rem; }
+                .elegant-template .resume-item h5, .elegant-template .resume-item h6 { font-size: 0.9rem; font-style: italic; color: #718096; }
                 .elegant-template .resume-sidebar .skills-category { margin-bottom: 0.75rem; }
                 .elegant-template .resume-sidebar .skills-category p { font-size: 0.85rem; color: #4a5568; }
 
                 /* --- Modern Template --- */
-                .modern-template { padding: 2rem; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; direction: rtl; text-align: right;}
+                .modern-template { padding: 2rem; direction: rtl; text-align: right;}
                 .modern-template .resume-header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 1rem; margin-bottom: 1.5rem; }
                 .modern-template .profile-picture-container { width: 120px; height: 120px; border-radius: 50%; border: 4px solid #8a2be2; margin-bottom: 1rem; }
                 .modern-template .resume-header h1 { font-size: 2.5rem; font-weight: 700; color: #8a2be2; margin: 0; }
@@ -3163,7 +3747,7 @@ const App: React.FC = () => {
                 .modern-template .skills-category h4 { font-weight: bold; margin-bottom: 0.25rem; }
 
                 /* --- Classic Template --- */
-                .classic-template { font-family: 'Georgia', serif; padding: 2.5rem; direction: rtl; text-align: right;}
+                .classic-template { font-family: 'Cairo', 'Times New Roman', serif; padding: 2.5rem; direction: rtl; text-align: right;}
                 .classic-template .profile-picture-container { display: none; }
                 .classic-template .resume-header { text-align: center; margin-bottom: 2rem; }
                 .classic-template .resume-header h1 { font-size: 2.5rem; font-weight: bold; }
@@ -3174,104 +3758,28 @@ const App: React.FC = () => {
                 .classic-template .resume-item h4 { font-size: 1.1rem; }
                 .classic-template .skills-category h4 { font-size: 1rem; }
 
-                /* --- Creative Template (REVISED & FIXED) --- */
-                .creative-template {
-                    background-color: #fff; /* White background for the main page area */
-                    color: #212529;
-                    font-family: 'Tahoma', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                    direction: rtl; 
-                    text-align: right;
-                }
-                .creative-template .resume-header {
-                    background-color: #343a40;
-                    color: #fff;
-                    padding: 2.5rem 1.5rem;
-                    text-align: center;
-                }
-                .creative-template .profile-picture-container {
-                    width: 140px;
-                    height: 140px;
-                    border-radius: 50%;
-                    border: 4px solid #fff;
-                    margin-bottom: 1rem;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-                }
+                /* --- Creative Template --- */
+                .creative-template { background-color: #f8f9fa; color: #212529; direction: rtl; text-align: right;}
+                .creative-template .resume-header { background-color: #343a40; color: #fff; padding: 2.5rem 1.5rem; text-align: center; }
+                .creative-template .profile-picture-container { width: 140px; height: 140px; border-radius: 50%; border: 4px solid #fff; margin-bottom: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
                 .creative-template .resume-header-text { margin-bottom: 1rem; }
-                .creative-template .resume-header h1 {
-                    font-size: 2.8rem;
-                    font-weight: 700;
-                    margin: 0;
-                }
-                .creative-template .resume-header h2 {
-                    font-size: 1.4rem;
-                    font-weight: 300;
-                    color: #ced4da;
-                    margin-top: 0.25rem;
-                }
-                .creative-template .resume-header .resume-contact {
-                    justify-content: center;
-                    font-size: 0.9rem;
-                    gap: 0.8rem 1.5rem;
-                }
-                .creative-template .resume-header .resume-contact a {
-                    color: #adb5bd;
-                    text-decoration: none;
-                    transition: color 0.2s;
-                }
+                .creative-template .resume-header h1 { font-size: 2.8rem; font-weight: 700; margin: 0; }
+                .creative-template .resume-header h2 { font-size: 1.4rem; font-weight: 300; color: #ced4da; margin-top: 0.25rem; }
+                .creative-template .resume-header .resume-contact { justify-content: center; font-size: 0.9rem; gap: 0.8rem 1.5rem; }
+                .creative-template .resume-header .resume-contact a { color: #adb5bd; text-decoration: none; transition: color 0.2s; }
                 .creative-template .resume-header .resume-contact a:hover { color: #fff; }
                 .creative-template .resume-header .resume-contact i { color: #007bff; }
-
-                .creative-template .resume-body-container {
-                    display: flex;
-                    flex-direction: row-reverse; /* Sidebar on right */
-                    padding: 2rem;
-                    gap: 2rem;
-                    background-color: #f8f9fa;
-                }
-                .creative-template .resume-main-content {
-                    flex: 2;
-                    min-width: 0;
-                }
-                .creative-template .resume-sidebar {
-                    flex: 1;
-                    min-width: 0;
-                }
+                .creative-template .resume-body-container { display: flex; flex-direction: row-reverse; padding: 2rem; gap: 2rem; background-color: #fff; }
+                .creative-template .resume-main-content { flex: 2; min-width: 0; }
+                .creative-template .resume-sidebar { flex: 1; min-width: 0; }
                 .creative-template .resume-contact-sidebar { display: none; }
-                
-                .creative-template .resume-section h3 {
-                    font-size: 1.3rem;
-                    font-weight: 700;
-                    color: #007bff;
-                    border-bottom: 2px solid #dee2e6;
-                    padding-bottom: 0.5rem;
-                    margin-bottom: 1.5rem;
-                    display: flex;
-                    align-items: center;
-                    gap: 0.75rem;
-                }
+                .creative-template .resume-section h3 { font-size: 1.3rem; font-weight: 700; color: #007bff; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
                 .creative-template .resume-section h3 i { display: inline-block; font-size: 1.1rem; }
-
-                .creative-template .resume-main-content .resume-item h4 { font-size: 1.1rem; font-weight: bold; }
-                .creative-template .resume-main-content .resume-item h5 { font-size: 1rem; color: #495057; margin: 0.2rem 0; }
-                .creative-template .resume-main-content .resume-item h6 { font-size: 0.9rem; color: #6c757d; margin-bottom: 0.5rem; }
-                .creative-template .resume-main-content .resume-item ul { color: #343a40; padding-right: 1.5rem; list-style-position: outside; }
-                .creative-template .resume-main-content .resume-item li { margin-bottom: 0.3rem; line-height: 1.6; }
                 .creative-template .resume-main-content p { line-height: 1.6; color: #343a40; }
-                
-                .creative-template .resume-sidebar .resume-item h4 { font-size: 1.05rem; }
-                .creative-template .resume-sidebar .resume-item h5,
-                .creative-template .resume-sidebar .resume-item h6 { font-size: 0.9rem; }
-                .creative-template .skills-category h4 { font-weight: bold; color: #212529; font-size: 1rem; margin-bottom: 0.4rem; }
                 .creative-template .skills-category p { font-size: 0.9rem; line-height: 1.7; color: #495057; }
                 
-                @media (max-width: 768px) {
-                    .creative-template .resume-body-container {
-                        flex-direction: column;
-                    }
-                }
-                
                 /* --- ATS Template --- */
-                .ats-template { background-color: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 2rem; font-size: 11pt; direction: rtl; text-align: right;}
+                .ats-template { background-color: #fff; color: #000; padding: 2rem; font-size: 11pt; direction: rtl; text-align: right;}
                 .ats-template .profile-picture-container, .ats-template .resume-sidebar, .ats-template .resume-section h3 i { display: none; }
                 .ats-template .resume-header { text-align: center; margin-bottom: 1.5rem; }
                 .ats-template .resume-header h1 { font-size: 1.8rem; font-weight: bold; margin-bottom: 0.25rem; }
@@ -3279,18 +3787,12 @@ const App: React.FC = () => {
                 .ats-template .resume-contact { justify-content: center; font-size: 10pt; }
                 .ats-template .resume-section { margin-bottom: 0.5rem; }
                 .ats-template .resume-section h3 { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 0.25rem; margin: 1rem 0 0.5rem; text-transform: uppercase; }
-                .ats-template .resume-item { margin-bottom: 0.75rem; }
-                .ats-template .resume-item h4 { font-size: 1rem; font-weight: bold; }
-                .ats-template .resume-item h5 { font-size: 0.9rem; font-style: normal; color: #333; }
-                .ats-template .resume-item h6 { font-size: 0.9rem; color: #555; }
-                .ats-template .resume-item ul { list-style-type: disc; padding-right: 20px; }
-                .ats-template .skills-category h4 { font-weight: bold; margin-bottom: 0.25rem; }
-                .ats-template .skills-category p { margin-top: 0; }
                 
                 /* Markdown Table Styles */
-                .markdown-table { border: 1px solid rgba(138,43,226,0.3); border-collapse: collapse; width: 100%; }
+                .markdown-table { border: 1px solid rgba(138,43,226,0.3); border-collapse: collapse; width: 100%; margin: 1rem 0; }
                 .markdown-table th, .markdown-table td { border: 1px solid rgba(138,43,226,0.3); padding: 8px 12px; text-align: right; }
-                .markdown-table th { background-color: rgba(30,30,62,0.8); }
+                .markdown-table th { background-color: rgba(30,30,62,0.8); font-weight: bold; }
+                .markdown-table tbody tr:nth-child(even) { background-color: rgba(255,255,255,0.05); }
 
                 /* Study Mode View Styles */
                 .study-session-view { background: rgba(10,10,26,0.5); border-radius: 0.75rem; border: 1px solid rgba(138,43,226,0.2); padding: 1.5rem; }
@@ -3302,6 +3804,77 @@ const App: React.FC = () => {
                 /* Code Project Styles */
                 .review-section { background: rgba(10,10,26,0.7); padding: 1rem; border-radius: 0.5rem; border-left: 3px solid #8a2be2; }
                 .review-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem; display: flex; align-items: center; }
+
+                /* YouTube Search Results Styles */
+                .youtube-results-container { width: 100%; }
+                .youtube-results-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                    gap: 1rem;
+                }
+                .youtube-video-card {
+                    background: rgba(10,10,26,0.7);
+                    border-radius: 0.5rem;
+                    overflow: hidden;
+                    cursor: pointer;
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                    border: 1px solid rgba(138,43,226,0.2);
+                }
+                .youtube-video-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 5px 15px rgba(138,43,226,0.3);
+                }
+                .youtube-embed-container {
+                    position: relative;
+                    width: 100%;
+                    padding-top: 56.25%; /* 16:9 Aspect Ratio */
+                    background-color: #000;
+                    border-radius: 0.5rem;
+                }
+                .youtube-embed-container iframe {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    border: 0;
+                }
+                
+                /* KaTeX and Mermaid Styles */
+                .katex-display {
+                    padding: 0.5rem 0;
+                    overflow-x: auto;
+                    overflow-y: hidden;
+                }
+                .mermaid-container {
+                    background-color: #242424;
+                    padding: 1rem;
+                    border-radius: 0.5rem;
+                    margin: 0;
+                    display: flex;
+                    justify-content: center;
+                    overflow: auto;
+                }
+                .mermaid-container svg {
+                    max-width: 100%;
+                    height: auto;
+                }
+                .diagram-download-btn {
+                    background-color: rgba(10, 10, 26, 0.8);
+                    backdrop-filter: blur(4px);
+                    color: white;
+                    border: 1px solid rgba(138, 43, 226, 0.5);
+                    padding: 4px 10px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .diagram-download-btn:hover {
+                    background-color: #8a2be2;
+                    border-color: #8a2be2;
+                }
 
             `}</style>
         </LanguageProvider>

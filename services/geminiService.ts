@@ -35,13 +35,12 @@ interface CustomTool {
 }
 
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) {
+if (!process.env.API_KEY) {
     // In a real app, you might want to show this to the user in a less disruptive way.
     alert("Gemini API key is not configured. Please set the API_KEY environment variable.");
     throw new Error("API_KEY environment variable is not set.");
 }
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const modelConfig = {
     safetySettings: [
@@ -183,7 +182,7 @@ export const enhancePromptForImage = async (prompt: string, style: string): Prom
         });
         return response.text.trim();
     } catch (error) {
-        console.error("Error enhancing prompt:", error);
+        console.error("Error enhancing prompt:", String(error));
         return prompt; // Fallback to original prompt on error
     }
 };
@@ -240,7 +239,7 @@ export const generateVideo = async (prompt: string, imageBytes: string | null, o
     }
 
     onProgress("Downloading video...");
-    const videoResponse = await fetch(`${downloadLink}&key=${API_KEY}`);
+    const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
     if (!videoResponse.ok) {
         throw new Error("Failed to download the generated video.");
     }
@@ -276,7 +275,7 @@ export const extractUserInfo = async (prompt: string, response: string): Promise
         }
         return {};
     } catch (error) {
-        console.error("Error extracting user info:", error);
+        console.error("Error extracting user info:", String(error));
         return {};
     }
 };

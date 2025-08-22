@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Part, Type } from "@google/genai";
 
 // TYPES
@@ -16,7 +14,7 @@ interface Message {
 }
 
 interface ChatSession {
-    id: string;
+    id:string;
     title: string;
     messages: Message[];
     settings: ChatSettings;
@@ -36,29 +34,31 @@ interface CustomTool {
 }
 
 
-const API_KEY = "AIzaSyDWoUYK44lTPqOGmbsSQm4ZkKcmr_1jHdM";
-// if (!API_KEY) {
-//     throw new Error("API_KEY environment variable is not set.");
-// }
+const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+    // In a real app, you might want to show this to the user in a less disruptive way.
+    alert("Gemini API key is not configured. Please set the API_KEY environment variable.");
+    throw new Error("API_KEY environment variable is not set.");
+}
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const modelConfig = {
     safetySettings: [
         {
             category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-            threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            threshold: HarmBlockThreshold.BLOCK_NONE,
         },
         {
             category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-            threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            threshold: HarmBlockThreshold.BLOCK_NONE,
         },
         {
             category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-            threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            threshold: HarmBlockThreshold.BLOCK_NONE,
         },
         {
             category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-            threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            threshold: HarmBlockThreshold.BLOCK_NONE,
         },
     ],
 };
@@ -114,31 +114,36 @@ function buildGeniusAgentInstruction(
     language: 'ar' | 'en'
 ): string {
     let instruction = language === 'ar' 
-        ? "You are Nova AI, a genius-level AI agent. Your primary language is Arabic. You don't just answer questions; you perform tasks. Analyze the user's request and provide the most effective output."
+        ? "أنت Nova AI، وكيل ذكاء اصطناعي عبقري. لغتك الأساسية هي العربية. أنت لا تجيب على الأسئلة فحسب؛ بل تنفذ المهام. قم بتحليل طلب المستخدم وقدم أفضل مخرجات ممكنة."
         : "You are Nova AI, a genius-level AI agent. Your primary language is English. You don't just answer questions; you perform tasks. Analyze the user's request and provide the most effective output.";
     
     if (activeTool) {
         instruction = activeTool.prompt; // Tool prompt takes highest precedence
         // Add language instruction to tool prompt if not present
-        if (!/primary language is (Arabic|English)/i.test(instruction)) {
+        if (!/primary language is (Arabic|English)|لغتك الأساسية هي (العربية|الإنجليزية)/i.test(instruction)) {
             instruction += ` Your primary language for responding is ${language === 'ar' ? 'Arabic' : 'English'}.`;
         }
     }
     
     instruction += `\n\n**Core Task Directives & Rich Content Formatting:**
-- Your response format MUST match ONE of the following types based on the user's request:
-- **1. Plain Text:** For simple questions and conversational replies.
-- **2. News Report (JSON):** If the query is about news, current events, or requires web search. Use the Google Search tool, then respond ONLY with this JSON: \`{"type": "news_report", "title": "A summary title of the search results", "summary": "A concise summary of the findings.", "articles": [{"headline": "Article Title", "source": "Website Name", "snippet": "A brief relevant snippet...", "link": "https://example.com/article-url"}]}\`. Populate from search results.
-- **3. Table (JSON):** If the request involves organizing data in a tabular format. Respond ONLY with this JSON: \`{"type": "table", "title": "A descriptive title", "data": [["Header 1", "Header 2"], ["Row 1 Cell 1", "Row 1 Cell 2"]]}\`.
-- **4. Chart (JSON):** For data visualization requests. Respond ONLY with this JSON: \`{"type": "chart", "title": "A descriptive title", "data": {"chartType": "bar|pie|line", "chartData": {...}}}\` (Chart.js format).
-- **5. Report (JSON):** For summaries or structured documents. Respond ONLY with this JSON: \`{"type": "report", "title": "A descriptive title", "data": [{"section": "Section 1 Title", "content": "Section 1 text..."}, {"section": "Section 2 Title", "content": "..."}]}\`.
-- **6. Resume (JSON):** If the user asks to create a CV or resume, ensure you gather and include all key sections. The result MUST be professional and ATS-friendly. Do NOT ask for a photo; the user will upload it separately. Respond ONLY with this JSON, using detailed examples: \`{"type": "resume", "name": "Full Name", "title": "Professional Job Title", "contact": {"email": "professional.email@example.com", "phone": "+1234567890", "linkedin": "linkedin.com/in/username", "github": "github.com/username", "website": "yourportfolio.com"}, "summary": "A brief but impactful professional summary highlighting 3-4 key skills and achievements relevant to the target job.", "experience": [{"title": "Senior Software Engineer", "company": "Innovatech Solutions", "location": "San Francisco, CA", "dates": "Jan 2020 - Present", "responsibilities": ["Led the development of a scalable microservices architecture, resulting in a 40% improvement in application performance.", "Mentored a team of 5 junior developers, improving team productivity by 25%.", "Collaborated with product managers to define feature requirements and technical specifications."]}, {"title": "Software Developer", "company": "Data Systems Inc.", "location": "Boston, MA", "dates": "Jun 2018 - Dec 2019", "responsibilities": ["Developed and maintained RESTful APIs for a client-facing financial data platform.", "Wrote unit and integration tests, increasing code coverage from 70% to 92%."]}], "education": [{"degree": "B.Sc. in Computer Science", "institution": "University of Technology", "dates": "Sep 2014 - May 2018", "details": "Graduated with High Honors (GPA: 3.9/4.0)."}], "skills": [{"category": "Programming Languages", "items": ["JavaScript (ES6+)", "TypeScript", "Python", "Java", "SQL"]}, {"category": "Frameworks & Libraries", "items": ["React", "Node.js", "Express.js", "Spring Boot"]}, {"category": "Databases", "items": ["PostgreSQL", "MongoDB", "Redis"]}, {"category": "Tools & Platforms", "items": ["Docker", "Kubernetes", "AWS", "Git", "JIRA"]}], "projects": [{"name": "Open Source Contribution", "description": "Contributed a major feature to a popular open-source library, which was merged and is now used by thousands of developers.", "link": "github.com/project/pull/123"}]}\`.
-- **7. Code Project (JSON):** If the user asks to program something. Generate the necessary code file(s) and a structured review. Respond ONLY with this JSON: \`{"type": "code_project", "title": "Project Title", "files": [{"filename": "index.html", "language": "html", "code": "..."}], "review": {"overview": "...", "strengths": ["..."], "improvements": ["..."], "nextSteps": ["..."]}}\`.
-- **8. Study Mode (Multi-step JSON):**
-    - **Step 1: Explanation.** If the user wants to learn/study a topic, your first response MUST be a JSON object of type 'study_explanation'. The 'explanation' field should be a detailed string using Markdown for headings, lists, **tables**, code blocks (\`\`\`lang...), and LaTeX math formulas ($$...$$). Example: \`{"type": "study_explanation", "topic": "Photosynthesis", "explanation": "# Photosynthesis\\n## ...\\n| Input | Output |\\n|---|---|\\n| CO2 | O2 |"}\`
-    - **Step 2: Review.** If the user asks for a review of the topic, respond ONLY with this JSON: \`{"type": "study_review", "topic": "Topic Name", "review": {"title": "Key Takeaways", "points": ["Point 1", "Point 2"]}}\`
-    - **Step 3: Quiz.** If the user asks for a quiz, respond ONLY with this JSON: \`{"type": "study_quiz", "topic": "Topic Name", "quiz": [{"type": "multiple_choice|short_answer", "question": "Question text?", "options": ["Option A", "Option B"], "correctAnswer": "Correct Answer Text or Index"}]}\`
-- **CRITICAL:** When a JSON format is required, your entire response MUST be the JSON object and nothing else. No introductory text, no explanations.`;
+- Your response format MUST match ONE of the following types based on the user's request.
+- **1. Explicit Commands:** If the user prompt starts with a command like \`/youtube\`, \`/resume\`, \`/report\`, \`/project\`, \`/chart\`, \`/table\`, prioritize generating the corresponding JSON format.
+- **2. Implicit Requests:** If no command is given, infer the best format from the context.
+- **3. Plain Text:** For simple questions, conversational replies, or when no other format fits.
+
+**JSON Formats (ONLY respond with the raw JSON object if one of these is chosen):**
+- **YouTube Search:** \`{"type": "youtube_search_results", "query": "...", "videos": [{"title": "...", "videoId": "...", "channel": "...", "description": "...", "thumbnailUrl": "..."}]}\`. Use your search tool to find real YouTube videos and their info.
+- **News Report:** \`{"type": "news_report", "title": "...", "summary": "...", "articles": [{"headline": "...", "source": "...", "snippet": "...", "link": "..."}]}\`. Use this for news queries or when using the search tool.
+- **Table:** \`{"type": "table", "title": "...", "data": [["Header 1"], ["Row 1 Cell 1"]]}\`.
+- **Chart:** \`{"type": "chart", "title": "...", "data": {"chartType": "bar|pie|line", "chartData": {...}}}\` (Chart.js format).
+- **Report:** \`{"type": "report", "title": "...", "data": [{"section": "Section 1", "content": "..."}]}\`.
+- **Resume:** \`{"type": "resume", "name": "Full Name", "title": "Professional Title", "contact": {...}, "summary": "...", "experience": [{...}], "education": [{...}], "skills": [{...}]}\`. Ensure it's professional and ATS-friendly.
+- **Code Project:** \`{"type": "code_project", "title": "Project Title", "files": [{"filename": "...", "language": "...", "code": "..."}], "review": {...}}\`.
+- **Study Mode (Multi-step):**
+    - **Explanation:** \`{"type": "study_explanation", "topic": "...", "explanation": "..."}\` (Use Markdown in 'explanation').
+    - **Review:** \`{"type": "study_review", "topic": "...", "review": {"title": "...", "points": [...]}}\`.
+    - **Quiz:** \`{"type": "study_quiz", "topic": "...", "quiz": [{"type": "...", "question": "...", "options": [...], "correctAnswer": "..."}]}\`.
+- **CRITICAL:** When a JSON format is required, your entire response MUST be the JSON object and nothing else. No introductory text, no explanations, no markdown specifiers.`;
 
 
     // Combine all knowledge sources for the AI.
@@ -270,6 +275,67 @@ export async function generateImage(
     });
 
     return response.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
+}
+
+export async function generateVideo(
+    prompt: string,
+    imageBytes: string | null,
+    onProgress: (message: string) => void
+): Promise<string> {
+    
+    const params: any = {
+        model: 'veo-2.0-generate-001',
+        prompt: prompt,
+        config: {
+            numberOfVideos: 1,
+        },
+    };
+
+    if (imageBytes) {
+        params.image = {
+            imageBytes: imageBytes,
+            mimeType: 'image/png', // Assuming PNG for simplicity
+        };
+    }
+    
+    let operation = await ai.models.generateVideos(params);
+    
+    const loadingMessages = [
+        "Warming up the AI core...",
+        "Analyzing your prompt...",
+        "Generating visual concepts...",
+        "Rendering initial video frames...",
+        "This can take a few minutes, please wait...",
+        "Adding details and motion...",
+        "Finalizing the video output...",
+        "Almost there, polishing the result...",
+    ];
+    let messageIndex = 0;
+    
+    while (!operation.done) {
+        onProgress(loadingMessages[messageIndex % loadingMessages.length]);
+        messageIndex++;
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Poll every 10 seconds
+        operation = await ai.operations.getVideosOperation({ operation: operation });
+    }
+
+    if (operation.error) {
+        console.error('Video generation failed:', operation.error);
+        throw new Error(operation.error.message ? String(operation.error.message) : 'Video generation failed with an unknown error.');
+    }
+
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) {
+        throw new Error('Video generation finished but no video URL was returned. The prompt may have been blocked.');
+    }
+    
+    onProgress("Downloading generated video...");
+    const response = await fetch(`${downloadLink}&key=${API_KEY}`);
+    if (!response.ok) {
+        throw new Error(`Failed to download video file: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
 }
 
 export async function enhancePromptForImage(originalPrompt: string, style: string): Promise<string> {

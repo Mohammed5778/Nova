@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Nova - AI Video Generation</title>
+    <link rel="stylesheet" href="index.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/genai": "https://esm.sh/@google/genai@^1.4.0"
+        }
+      }
+    </script>
+    <script type="module" src="index.js"></script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Nova</h1>
+        <p class="tagline">AI Video Generation, Reimagined.</p>
+        <button id="settings-button" title="Manage API Key">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V15a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+            ></path>
+          </svg>
+        </button>
+      </header>
+      <main class="main-content">
+        <section class="controls-panel">
+          <h2>Create</h2>
+          <div class="form-group">
+            <label for="prompt-input">Your Vision</label>
+            <textarea
+              id="prompt-input"
+              type="text"
+              placeholder="e.g., A majestic lion roaring on a rocky cliff at sunset"
+              rows="5"
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="file-input">Initial Image (Optional)</label>
+            <div class="file-upload-wrapper">
+              <label for="file-input" class="file-upload-button">
+                Choose Image
+              </label>
+              <input id="file-input" type="file" accept="image/*" />
+            </div>
+            <div id="image-preview-container">
+              <img
+                alt="Initial conditioning image preview"
+                id="img"
+                style="display: none"
+              />
+            </div>
+          </div>
+
+          <button id="generate-button">Generate</button>
+        </section>
+
+        <section class="output-panel">
+          <div id="output-placeholder">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="64"
+              height="64"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M10 15.5v-7L15.5 12Z" />
+              <path
+                d="M19.5 12H22c0-5.5-4.5-10-10-10S2 6.5 2 12s4.5 10 10 10"
+              />
+            </svg>
+            <p>Your generated video will appear here</p>
+          </div>
+          <p id="status"></p>
+          <video id="video" autoplay loop controls></video>
+          <div id="quota-error">
+            <p>
+              It seems you've exceeded the usage quota for your API key, or the
+              key is invalid. Please check your Google AI account for details.
+            </p>
+            <button id="open-key">Manage API Key</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="api-key-modal" class="modal-overlay">
+      <div class="modal-content">
+        <h2>Welcome to Nova</h2>
+        <p>
+          To start creating, please enter your Google AI API key. Nova provides
+          the interface, but you are responsible for the API usage costs.
+        </p>
+        <div class="form-group">
+          <label for="api-key-input">Your Google AI API Key</label>
+          <input type="password" id="api-key-input" placeholder="Enter your API key" />
+        </div>
+        <button id="save-api-key-button">Save and Start Creating</button>
+        <p class="get-key-link">
+          Don't have a key?
+          <a
+            href="https://aistudio.google.com/app/apikey"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Get one from Google AI Studio</a
+          >
+        </p>
+      </div>
+    </div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

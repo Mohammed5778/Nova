@@ -1,13 +1,11 @@
-
-import React, { useState, useEffect, useRef, useCallback, createContext, useContext, useMemo } from 'react';
-import { getAiResponseStream, generateImage, enhancePromptForImage, generateVideo, extractUserInfo } from './services/geminiService';
+import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
+import { getAiResponseStream, generateImage as generateImageService, enhancePromptForImage, generateVideo as generateVideoService, extractUserInfo } from './services/geminiService';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
 import { Part } from '@google/genai';
 import Chart from 'chart.js/auto';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import katex from 'katex';
 import { translations, TranslationKey } from './translations';
 
 
@@ -34,6 +32,7 @@ const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children })
     const setLanguage = (lang: Language) => {
         localStorage.setItem('nova-language', lang);
         setLanguageState(lang);
+        // Set HTML lang attribute for accessibility
         document.documentElement.lang = lang;
     };
 
@@ -78,57 +77,6 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
     reader.onerror = error => reject(error);
 });
 
-const exportElementAsPdf = async (element: HTMLElement, filename: string) => {
-    const tempClass = 'pdf-export-active';
-    element.classList.add(tempClass);
-
-    // Wait a moment for styles to apply before capturing
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    try {
-        const canvas = await html2canvas(element, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff', // Explicitly set background
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-            orientation: 'p',
-            unit: 'mm',
-            format: 'a4'
-        });
-
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-        const ratio = canvasHeight / canvasWidth;
-        const imgHeight = pdfWidth * ratio;
-        
-        let heightLeft = imgHeight;
-        let position = 0;
-
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-
-        while (heightLeft > 0) {
-            position = position - pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
-        }
-        pdf.save(filename);
-
-    } catch (error) {
-        console.error("Error exporting to PDF:", error);
-    } finally {
-        // Always clean up the class
-        element.classList.remove(tempClass);
-    }
-};
-
-
 
 // --- ENUMS & TYPES ---
 enum View {
@@ -159,16 +107,6 @@ interface TableContent { type: 'table'; title: string; data: string[][]; }
 interface ChartContent { type: 'chart'; title: string; data: { chartType: string; chartData: any; }; }
 interface ReportContent { type: 'report'; title: string; data: { section: string; content: string }[]; }
 interface NewsReportContent { type: 'news_report'; title: string; summary: string; articles: { headline: string; source: string; snippet: string; link: string }[]; }
-interface ArticleReviewContent {
-    type: 'article_review';
-    title: string;
-    source: string;
-    url: string;
-    summary: string;
-    key_points: string[];
-    analysis?: string;
-    sentiment?: 'positive' | 'negative' | 'neutral';
-}
 interface ResumeContent {
     type: 'resume';
     name: string;
@@ -213,7 +151,7 @@ interface YouTubeSearchResultsContent {
 }
 
 
-type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent | StudyExplanationContent | StudyReviewContent | StudyQuizContent | YouTubeSearchResultsContent | ArticleReviewContent;
+type RichContent = TableContent | ChartContent | ReportContent | NewsReportContent | ResumeContent | CodeProjectContent | StudyExplanationContent | StudyReviewContent | StudyQuizContent | YouTubeSearchResultsContent;
 
 
 interface Message {
@@ -350,37 +288,24 @@ const parseXlsxFile = (file: File) => new Promise<string[][]>((resolve, reject) 
 
 const InteractiveTable: React.FC<TableContent> = ({ title, data }) => {
     const { t } = useLanguage();
-    const tableContainerRef = useRef<HTMLDivElement>(null);
-    
-    const handleDownloadExcel = () => {
+    const handleDownload = () => {
         const worksheet = XLSX.utils.aoa_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
         XLSX.writeFile(workbook, `${title || 'table'}.xlsx`);
     };
 
-    const handleDownloadPdf = () => {
-        if (tableContainerRef.current) {
-            exportElementAsPdf(tableContainerRef.current, `${title || 'table'}.pdf`);
-        }
-    };
-
     if (!data || data.length === 0) return <p>{t('no_data_to_display')}</p>;
 
     return (
         <div className="bg-gray-900/50 p-4 rounded-lg my-2 border border-purple-500/30">
-            <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+            <div className="flex justify-between items-center mb-4">
                 <h4 className="font-bold">{title}</h4>
-                <div className="flex items-center gap-2">
-                    <button onClick={handleDownloadExcel} className="btn-secondary !text-xs !py-1 !px-3 !rounded-md flex items-center gap-2">
-                        <DownloadIcon /> {t('download_excel')}
-                    </button>
-                    <button onClick={handleDownloadPdf} className="btn-secondary !text-xs !py-1 !px-3 !rounded-md flex items-center gap-2">
-                        <FilePdfIcon /> {t('download_pdf')}
-                    </button>
-                </div>
+                <button onClick={handleDownload} className="btn-secondary !text-xs !py-1 !px-3 !rounded-md flex items-center gap-2">
+                    <DownloadIcon /> {t('download_excel')}
+                </button>
             </div>
-            <div ref={tableContainerRef} className="overflow-x-auto table-container max-h-96">
+            <div className="overflow-x-auto table-container max-h-96">
                 <table className="w-full text-sm text-left border-collapse">
                     <thead className="bg-[#1e1e3e] sticky top-0">
                         <tr>
@@ -435,20 +360,20 @@ const InteractiveChart: React.FC<ChartContent> = ({ title, data }) => {
     );
 };
 
-const ReportView: React.FC<{
+const CanvasView: React.FC<{
     title: string;
     data: { section: string; content: string }[];
     onUpdate: (newTitle: string, newData: { section: string; content: string }[]) => void;
 }> = ({ title, data, onUpdate }) => {
-    const reportRef = useRef<HTMLDivElement>(null);
+    const canvasRef = useRef<HTMLDivElement>(null);
     const { t } = useLanguage();
     
     const handleBlur = () => {
-        if (!reportRef.current) return;
-        const newTitle = reportRef.current.querySelector('.report-title')?.textContent || title;
-        const newSections = Array.from(reportRef.current.querySelectorAll('.report-section')).map(sectionEl => {
-            const sectionTitle = sectionEl.querySelector('.report-section-title')?.textContent || '';
-            const sectionContent = sectionEl.querySelector('.report-section-content')?.textContent || '';
+        if (!canvasRef.current) return;
+        const newTitle = canvasRef.current.querySelector('.canvas-title')?.textContent || title;
+        const newSections = Array.from(canvasRef.current.querySelectorAll('.canvas-section')).map(sectionEl => {
+            const sectionTitle = sectionEl.querySelector('.canvas-section-title')?.textContent || '';
+            const sectionContent = sectionEl.querySelector('.canvas-section-content')?.textContent || '';
             return { section: sectionTitle, content: sectionContent };
         });
         
@@ -458,8 +383,34 @@ const ReportView: React.FC<{
     };
 
     const handleExport = () => {
-        if (reportRef.current) {
-            exportElementAsPdf(reportRef.current, `${title.replace(/ /g, '_')}.pdf`);
+        if (canvasRef.current) {
+            const canvasElement = canvasRef.current;
+            html2canvas(canvasElement, { 
+                backgroundColor: '#ffffff',
+                scale: 2,
+                windowWidth: canvasElement.scrollWidth,
+                windowHeight: canvasElement.scrollHeight,
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                
+                const imgHeight = canvas.height * pdfWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft > 0) {
+                    position -= pageHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                pdf.save(`${title.replace(/ /g, '_')}.pdf`);
+            });
         }
     };
     
@@ -473,16 +424,14 @@ const ReportView: React.FC<{
                     </button>
                 </div>
             </div>
-            <div className="report-view-a4-container">
-                <div ref={reportRef} className="report-view-a4" onBlur={handleBlur}>
-                    <h3 contentEditable suppressContentEditableWarning className="report-title">{title}</h3>
-                    {data.map((item, index) => (
-                        <div key={index} className="report-section">
-                            <h4 contentEditable suppressContentEditableWarning className="report-section-title">{item.section}</h4>
-                            <p contentEditable suppressContentEditableWarning className="report-section-content">{item.content}</p>
-                        </div>
-                    ))}
-                </div>
+            <div ref={canvasRef} className="canvas-view" onBlur={handleBlur}>
+                <h3 contentEditable suppressContentEditableWarning className="canvas-title">{title}</h3>
+                {data.map((item, index) => (
+                    <div key={index} className="canvas-section">
+                        <h4 contentEditable suppressContentEditableWarning className="canvas-section-title">{item.section}</h4>
+                        <p contentEditable suppressContentEditableWarning className="canvas-section-content">{item.content}</p>
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -501,49 +450,6 @@ const NewsReportView: React.FC<NewsReportContent> = ({ title, summary, articles 
                         <p className="text-sm text-gray-400">{article.snippet}</p>
                     </a>
                 ))}
-            </div>
-        </div>
-    );
-};
-
-const ArticleReviewView: React.FC<ArticleReviewContent> = ({ title, source, url, summary, key_points, analysis, sentiment }) => {
-    const { t } = useLanguage();
-    const sentimentMeta = {
-        positive: { icon: 'fas fa-thumbs-up', color: 'text-green-400', label: t('sentiment_positive') },
-        negative: { icon: 'fas fa-thumbs-down', color: 'text-red-400', label: t('sentiment_negative') },
-        neutral: { icon: 'fas fa-minus', color: 'text-gray-400', label: t('sentiment_neutral') },
-    };
-    return (
-        <div className="bg-gray-900/50 p-4 rounded-lg my-2 border border-purple-500/30 text-right">
-            <h3 className="text-lg font-bold mb-1 text-purple-300">{title}</h3>
-            <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline block mb-3">{source}</a>
-            
-            <div className="space-y-4">
-                <div className="review-section">
-                    <h5 className="review-title"><i className="fas fa-file-alt mr-2"></i> {t('summary')}</h5>
-                    <p className="text-sm">{summary}</p>
-                </div>
-                <div className="review-section">
-                    <h5 className="review-title"><i className="fas fa-list-ul mr-2"></i> {t('key_points')}</h5>
-                    <ul className="list-disc pr-5 space-y-1 text-sm">
-                        {(key_points || []).map((point, i) => <li key={i}>{point}</li>)}
-                    </ul>
-                </div>
-                {analysis && (
-                    <div className="review-section">
-                        <h5 className="review-title"><i className="fas fa-search-plus mr-2"></i> {t('analysis')}</h5>
-                        <p className="text-sm">{analysis}</p>
-                    </div>
-                )}
-                {sentiment && (
-                    <div className="review-section">
-                        <h5 className="review-title"><i className="fas fa-smile-beam mr-2"></i> {t('sentiment')}</h5>
-                        <div className={`flex items-center gap-2 ${sentimentMeta[sentiment].color}`}>
-                            <i className={sentimentMeta[sentiment].icon}></i>
-                            <span className="font-semibold capitalize">{sentimentMeta[sentiment].label}</span>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
@@ -647,7 +553,46 @@ const ResumeView: React.FC<{ resume: ResumeContent; onUpdate: (updatedResume: Re
 
     const handleExport = () => {
         if (resumeRef.current) {
-            exportElementAsPdf(resumeRef.current, `${name.replace(/ /g, '_')}_Resume.pdf`);
+            const elToClone = resumeRef.current;
+            // Temporarily set direction for canvas rendering if creative template
+            const originalDir = elToClone.dir;
+            if (template === 'creative') {
+                elToClone.dir = 'ltr';
+            }
+            
+            html2canvas(elToClone, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                windowWidth: elToClone.scrollWidth,
+                windowHeight: elToClone.scrollHeight,
+            }).then(canvas => {
+                // Restore original direction
+                elToClone.dir = originalDir;
+
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = imgHeight / imgWidth;
+                const canvasHeightOnPdf = pdfWidth * ratio;
+
+                let heightLeft = canvasHeightOnPdf;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
+                heightLeft -= pdfHeight;
+
+                while (heightLeft > 0) {
+                    position = position - pdfHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
+                    heightLeft -= pdfHeight;
+                }
+
+                pdf.save(`${name.replace(/ /g, '_')}_Resume.pdf`);
+            });
         }
     };
     
@@ -786,143 +731,14 @@ const YouTubeSearchResultsView: React.FC<YouTubeSearchResultsContent & { onPlayV
 };
 
 
-// --- ADVANCED RENDERERS (MERMAID, KATEX) & MARKDOWN ---
-
-const MermaidDiagram: React.FC<{ chart: string }> = React.memo(({ chart }) => {
-    const ref = useRef<HTMLDivElement>(null);
-    const { t } = useLanguage();
-
-    useEffect(() => {
-        if (ref.current && chart) {
-            (window as any).mermaid.initialize({ startOnLoad: false, theme: 'dark' });
-            (window as any).mermaid.render(`mermaid-${Date.now()}`, chart)
-                .then(({ svg }: { svg: string }) => {
-                    if (ref.current) {
-                        ref.current.innerHTML = svg;
-                    }
-                })
-                .catch((e: any) => {
-                    console.error('Mermaid rendering error:', e);
-                    if (ref.current) {
-                        ref.current.innerHTML = `<p class="text-red-400">Error rendering diagram.</p>`;
-                    }
-                });
-        }
-    }, [chart]);
-
-    const handleDownloadSvg = useCallback(() => {
-        if (ref.current?.innerHTML) {
-            const svgContent = ref.current.innerHTML;
-            const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `nova-ai-diagram-${Date.now()}.svg`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }
-    }, []);
-
-    const handleDownloadPng = useCallback(() => {
-        if (ref.current?.innerHTML) {
-            const svgString = ref.current.innerHTML;
-            const svgElement = ref.current.querySelector('svg');
-            if (!svgElement) return;
-
-            // Get dimensions from SVG
-            const widthAttr = svgElement.getAttribute('width');
-            const heightAttr = svgElement.getAttribute('height');
-            const viewBox = svgElement.getAttribute('viewBox')?.split(' ').map(Number);
-            
-            const width = widthAttr ? parseFloat(widthAttr) : (viewBox ? viewBox[2] : 800);
-            const height = heightAttr ? parseFloat(heightAttr) : (viewBox ? viewBox[3] : 600);
-            const scale = 2; // For higher resolution
-
-            const canvas = document.createElement('canvas');
-            canvas.width = width * scale;
-            canvas.height = height * scale;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-            
-            ctx.fillStyle = '#1e1f20'; // Match app theme background for better look
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const img = new Image();
-            img.onload = () => {
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const link = document.createElement('a');
-                link.download = `nova-ai-diagram-${Date.now()}.png`;
-                link.href = canvas.toDataURL('image/png');
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-            img.onerror = (e) => console.error("Image loading for canvas failed", e);
-            // Use btoa to handle special characters correctly in the data URL
-            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-            img.src = URL.createObjectURL(svgBlob);
-        }
-    }, []);
-
-    return (
-        <div className="relative group/diagram my-4">
-            <div className="mermaid-container" ref={ref} />
-            <div className="absolute top-2 right-2 z-10 flex items-center gap-2 opacity-0 group-hover/diagram:opacity-100 transition-opacity">
-                <button onClick={handleDownloadSvg} title={t('download_svg')} className="diagram-download-btn">
-                    <i className="fas fa-code mr-1"></i> SVG
-                </button>
-                <button onClick={handleDownloadPng} title={t('download_png')} className="diagram-download-btn">
-                    <i className="fas fa-image mr-1"></i> PNG
-                </button>
-            </div>
-        </div>
-    );
-});
-
-
-const KatexDisplay: React.FC<{ math: string, displayMode: boolean }> = React.memo(({ math, displayMode }) => {
-    const html = useMemo(() => {
-        try {
-            return katex.renderToString(math, {
-                throwOnError: false,
-                displayMode: displayMode,
-            });
-        } catch (e) {
-            console.error('Katex rendering error:', e);
-            return `<p class="text-red-400">Error rendering math formula.</p>`;
-        }
-    }, [math, displayMode]);
-
-    return <span dangerouslySetInnerHTML={{ __html: html }} />;
-});
+// --- STUDY MODE COMPONENTS ---
 
 const RichMarkdownRenderer: React.FC<{ markdown: string, onPreviewCode: (code: string, language: string) => void }> = ({ markdown, onPreviewCode }) => {
-    const renderSimpleMarkdown = (text: string) => {
-        let html = text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');       // Italic
-
-        return html.split('\n').map((line, lineIndex) => {
-            if (line.startsWith('### ')) return <h4 key={lineIndex} className="text-lg font-bold mt-4 mb-2">{line.substring(4)}</h4>;
-            if (line.startsWith('## ')) return <h3 key={lineIndex} className="text-xl font-bold mt-5 mb-3 text-purple-300">{line.substring(3)}</h3>;
-            if (line.startsWith('# ')) return <h2 key={lineIndex} className="text-2xl font-bold mt-6 mb-4 text-purple-200">{line.substring(2)}</h2>;
-            if (line.startsWith('- ') || line.startsWith('* ')) return <li key={lineIndex} className="ml-5">{line.substring(2)}</li>
-            if (line.trim() === '') return null;
-            return <p key={lineIndex} className="my-2 leading-relaxed" dangerouslySetInnerHTML={{ __html: line }} />;
-        });
-    };
-
-    const parts = useMemo(() => markdown.split(/(```[\s\S]*?```|\$\$[\s\S]*?\$\$)/g).filter(Boolean), [markdown]);
+    const parts = markdown.split(/(```[\s\S]*?```|\$\$[\s\S]*?\$\$|\|(?:[^|\r\n]*\|)+)/g).filter(Boolean);
 
     return (
         <div>
             {parts.map((part, index) => {
-                if (part.startsWith('```mermaid')) {
-                    const chart = part.replace(/```mermaid\n|```/g, '').trim();
-                    return <MermaidDiagram key={index} chart={chart} />;
-                }
                 if (part.startsWith('```')) {
                     const codeMatch = part.match(/```(\w*)\n([\s\S]+)\n```/);
                     if (codeMatch) {
@@ -933,17 +749,19 @@ const RichMarkdownRenderer: React.FC<{ markdown: string, onPreviewCode: (code: s
                 }
                 if (part.startsWith('$$') && part.endsWith('$$')) {
                     const math = part.substring(2, part.length - 2).trim();
-                    return <KatexDisplay key={index} math={math} displayMode={true} />;
+                    return (
+                        <div key={index} className="p-4 my-2 bg-black/30 rounded-lg text-center text-lg font-mono text-purple-300 overflow-x-auto" dir="ltr">
+                            {math}
+                        </div>
+                    );
                 }
-                 if (part.startsWith('|')) { // Basic Table Support
-                    const rows = part.split('\n').filter(row => row.includes('|')).map(row => row.trim());
-                    if (rows.length < 2) return renderSimpleMarkdown(part);
-
+                if (part.startsWith('|')) {
+                    const rows = part.split('\n').filter(row => row.includes('|'));
                     const tableData = rows.map(row => row.split('|').map(cell => cell.trim()).slice(1, -1));
-                    if (tableData.length < 2 || tableData[1].some(cell => !cell.includes('---'))) return renderSimpleMarkdown(part);
-                    
+                    if (tableData.length < 2) return <p key={index}>{part}</p>; // Not a valid table
+
                     const header = tableData[0];
-                    const body = tableData.slice(2);
+                    const body = tableData.slice(2); // Skip header and separator line
                     return (
                         <div key={index} className="overflow-x-auto my-4">
                             <table className="w-full text-sm text-left border-collapse markdown-table">
@@ -963,14 +781,19 @@ const RichMarkdownRenderer: React.FC<{ markdown: string, onPreviewCode: (code: s
                         </div>
                     );
                 }
-                return <React.Fragment key={index}>{renderSimpleMarkdown(part)}</React.Fragment>;
+                // Handle simple text, headings, and lists
+                return part.split('\n').map((line, lineIndex) => {
+                    if (line.startsWith('### ')) return <h4 key={`${index}-${lineIndex}`} className="text-lg font-bold mt-4 mb-2">{line.substring(4)}</h4>;
+                    if (line.startsWith('## ')) return <h3 key={`${index}-${lineIndex}`} className="text-xl font-bold mt-5 mb-3 text-purple-300">{line.substring(3)}</h3>;
+                    if (line.startsWith('# ')) return <h2 key={`${index}-${lineIndex}`} className="text-2xl font-bold mt-6 mb-4 text-purple-200">{line.substring(2)}</h2>;
+                    if (line.startsWith('- ') || line.startsWith('* ')) return <li key={`${index}-${lineIndex}`} className="ml-5">{line.substring(2)}</li>
+                    if (line.trim() === '') return null;
+                    return <p key={`${index}-${lineIndex}`} className="my-2 leading-relaxed">{line}</p>;
+                });
             })}
         </div>
     );
 };
-
-
-// --- STUDY MODE COMPONENTS ---
 
 const StudyExplanationView: React.FC<{
     data: StudyExplanationContent;
@@ -1150,15 +973,38 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onSaveMemory, on
     const isUser = message.role === 'user';
     const alignClass = isUser ? 'self-end' : 'self-start';
     const bgClass = isUser
-        ? 'bg-blue-gradient text-white rounded-br-lg'
-        : 'bg-model-message-bg rounded-bl-lg';
+        ? 'bg-gradient-to-r from-[#8a2be2] to-[#00bfff] text-white rounded-br-lg'
+        : 'bg-[rgba(30,30,60,0.8)] border border-[rgba(138,43,226,0.3)] rounded-bl-lg';
     const { t } = useLanguage();
 
     const renderContent = () => {
         const { content } = message;
 
         if (typeof content === 'string') {
-            return <RichMarkdownRenderer markdown={content} onPreviewCode={onPreviewCode} />;
+            const codeBlockRegex = /```(\w*)\n([\s\S]+?)\n```/g;
+            const parts = [];
+            let lastIndex = 0;
+            let match;
+    
+            while ((match = codeBlockRegex.exec(content)) !== null) {
+                if (match.index > lastIndex) {
+                    parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap">{content.substring(lastIndex, match.index)}</p>);
+                }
+                const language = match[1] || 'plaintext';
+                const code = match[2].trim();
+                parts.push(<CodeBlock key={`code-${match.index}`} language={language} code={code} onPreview={onPreviewCode} />);
+                lastIndex = codeBlockRegex.lastIndex;
+            }
+    
+            if (lastIndex < content.length) {
+                parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap">{content.substring(lastIndex)}</p>);
+            }
+    
+            if (parts.length === 0) {
+                return <p className="whitespace-pre-wrap">{content}</p>;
+            }
+    
+            return parts;
         }
         
         if (typeof content === 'object' && content !== null) {
@@ -1166,7 +1012,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onSaveMemory, on
             switch (richContent.type) {
                 case 'table': return <InteractiveTable {...richContent} />;
                 case 'chart': return <InteractiveChart {...richContent} />;
-                case 'report': return <ReportView 
+                case 'report': return <CanvasView 
                                         title={richContent.title} 
                                         data={richContent.data}
                                         onUpdate={(newTitle, newData) => {
@@ -1175,7 +1021,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onSaveMemory, on
                                         }}
                                     />;
                 case 'news_report': return <NewsReportView {...richContent} />;
-                case 'article_review': return <ArticleReviewView {...richContent} />;
                 case 'resume': return <ResumeView resume={richContent} onUpdate={(updatedResume) => onUpdateMessageContent(message.id, updatedResume)} />;
                 case 'code_project': return <CodeProjectView project={richContent} onPreviewCode={onPreviewCode} />;
                 case 'study_explanation': return <StudyExplanationView data={richContent} onFollowUp={onStudyFollowUp} onPreviewCode={onPreviewCode} />;
@@ -1390,11 +1235,11 @@ const MainSidebar: React.FC<{
     return (
         <>
             {/* Mobile Drawer */}
-            <aside className={`lg:hidden fixed top-0 bottom-0 right-0 h-full z-50 bg-sidebar-bg backdrop-blur-md flex flex-col p-3 border-l border-purple-500/20 transition-transform duration-300 w-72 ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <aside className={`lg:hidden fixed top-0 bottom-0 right-0 h-full z-50 bg-[rgba(10,10,26,0.95)] backdrop-blur-md flex flex-col p-3 border-l border-purple-500/20 transition-transform duration-300 w-72 ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                {sidebarContent(true)}
             </aside>
             {/* Desktop Sidebar */}
-            <aside className={`hidden lg:flex bg-sidebar-bg backdrop-blur-md flex-col p-3 border-l border-purple-500/20 transition-all duration-300 relative shrink-0 ${isCollapsed ? 'w-20' : 'w-72'}`}>
+            <aside className={`hidden lg:flex bg-[rgba(10,10,26,0.8)] backdrop-blur-md flex-col p-3 border-l border-purple-500/20 transition-all duration-300 relative shrink-0 ${isCollapsed ? 'w-20' : 'w-72'}`}>
                 {sidebarContent(false)}
             </aside>
         </>
@@ -1457,8 +1302,7 @@ const CreativeStudioView: React.FC<{
     onVideoGenerated: (item: VideoHistoryItem) => void;
     userPoints: number;
     deductPoints: (amount: number) => boolean;
-    onNoPoints: () => void;
-}> = ({ imageHistory, videoHistory, onImageGenerated, onVideoGenerated, userPoints, deductPoints, onNoPoints }) => {
+}> = ({ imageHistory, videoHistory, onImageGenerated, onVideoGenerated, userPoints, deductPoints }) => {
     const { t } = useLanguage();
     const [mode, setMode] = useState<'image' | 'video'>('image');
     const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images');
@@ -1496,10 +1340,9 @@ const CreativeStudioView: React.FC<{
         { value: 'fantasy', label: t('style_fantasy') }, { value: 'anime', label: t('style_anime') },
         { value: 'digital_art', label: t('style_digital_art') }, { value: '3d_model', label: t('style_3d_model') },
     ];
-    
+
     const handleGenerateImage = async () => {
         if (!imagePrompt) { setImageError(t('error_prompt_required')); return; }
-        if (userPoints < imageCost) { onNoPoints(); return; }
         if (!deductPoints(imageCost)) return;
 
         setIsImageLoading(true); setImageError(''); setCurrentImages([]);
@@ -1517,7 +1360,7 @@ const CreativeStudioView: React.FC<{
         try {
             let generatedUrls: string[];
             if (imageModel === 'gemini') {
-                generatedUrls = await generateImage(finalPrompt, aspectRatio, numImages);
+                generatedUrls = await generateImageService(finalPrompt, aspectRatio, numImages);
             } else {
                  const response = await fetch(`https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`);
                  if (!response.ok) throw new Error("Network response was not ok from Pollinations.");
@@ -1548,7 +1391,6 @@ const CreativeStudioView: React.FC<{
     
     const handleGenerateVideo = async () => {
         if (!videoPrompt) { setVideoError(t('error_prompt_required')); return; }
-        if (userPoints < videoCost) { onNoPoints(); return; }
         if (!deductPoints(videoCost)) return;
 
         setIsVideoLoading(true); setVideoError(''); setCurrentVideo(null);
@@ -1558,7 +1400,7 @@ const CreativeStudioView: React.FC<{
             if (videoImage.file) {
                 imageBytes = await fileToBase64(videoImage.file);
             }
-            const videoUrl = await generateVideo(videoPrompt, imageBytes, (message) => {
+            const videoUrl = await generateVideoService(videoPrompt, imageBytes, (message) => {
                 setVideoLoadingMessage(message);
             });
             setCurrentVideo(videoUrl);
@@ -1590,13 +1432,10 @@ const CreativeStudioView: React.FC<{
     
     const handleCopy = (text: string) => navigator.clipboard.writeText(text);
 
-    const hasImagePoints = userPoints >= imageCost;
-    const hasVideoPoints = userPoints >= videoCost;
-
     return (
-        <div className="flex flex-col md:flex-row h-full w-full">
+        <div className="flex flex-col md:flex-row h-full w-full overflow-hidden">
             {/* Controls Panel */}
-            <div className="w-full md:w-96 p-4 md:p-6 bg-[rgba(10,10,26,0.8)] border-l border-purple-500/20 shrink-0 md:overflow-y-auto">
+            <div className="w-full md:w-96 p-4 md:p-6 bg-[rgba(10,10,26,0.8)] border-l border-purple-500/20 shrink-0 overflow-y-auto">
                 <h1 className="text-2xl font-bold mb-6">{t('creative_studio')}</h1>
                 <div className="flex justify-center gap-2 p-1 bg-[rgba(30,30,60,0.8)] rounded-full mb-6">
                     <button onClick={() => setMode('image')} className={`w-full py-2 px-4 rounded-full text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${mode === 'image' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-purple-800/50'}`}><ImageIcon /> {t('image_generation')}</button>
@@ -1631,8 +1470,8 @@ const CreativeStudioView: React.FC<{
                                 </div>
                             </div>
                         </div>
-                        <button onClick={hasImagePoints ? handleGenerateImage : onNoPoints} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base disabled:bg-gray-500 disabled:shadow-none" disabled={isImageLoading}>
-                            {isImageLoading ? imageLoadingMessage : hasImagePoints ? <> <ImageIcon /> {t('generate_images_cost', imageCost)}</> : t('subscribe_for_unlimited')}
+                        <button onClick={handleGenerateImage} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base disabled:bg-gray-500 disabled:shadow-none" disabled={isImageLoading || userPoints < imageCost}>
+                            {isImageLoading ? imageLoadingMessage : <> <ImageIcon /> {t('generate_images_cost', imageCost)}</>}
                         </button>
                         {imageModel === 'pollinations' && <p className="text-xs text-center text-gray-400">{t('pollinations_disclaimer')}</p>}
                         {imageError && <p className="text-red-400 mt-2 text-center text-sm">{imageError}</p>}
@@ -1656,8 +1495,8 @@ const CreativeStudioView: React.FC<{
                             </div>
                         )}
 
-                        <button onClick={hasVideoPoints ? handleGenerateVideo : onNoPoints} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base disabled:bg-gray-500 disabled:shadow-none" disabled={isVideoLoading}>
-                             {isVideoLoading ? videoLoadingMessage : hasVideoPoints ? <> <VideoIcon /> {t('generate_video_cost', videoCost)}</> : t('subscribe_for_unlimited')}
+                        <button onClick={handleGenerateVideo} className="btn-primary w-full flex items-center justify-center gap-2 !py-3 !text-base disabled:bg-gray-500 disabled:shadow-none" disabled={isVideoLoading || userPoints < videoCost}>
+                            {isVideoLoading ? videoLoadingMessage : <> <VideoIcon /> {t('generate_video_cost', videoCost)}</>}
                         </button>
                          {videoError && <p className="text-red-400 mt-2 text-center text-sm">{videoError}</p>}
                     </div>
@@ -1994,20 +1833,8 @@ const ProfileView: React.FC<{
 const SettingsPopover: React.FC<{
     settings: ChatSettings;
     onChange: (newSettings: ChatSettings) => void;
-    userPoints: number;
-    onNoPoints: () => void;
-}> = ({ settings, onChange, userPoints, onNoPoints }) => {
+}> = ({ settings, onChange }) => {
     const { t } = useLanguage();
-    const hasPointsForFeatures = userPoints > 0;
-
-    const handleToggle = (setting: keyof ChatSettings, value: boolean) => {
-        if (!hasPointsForFeatures && value) {
-            onNoPoints();
-            return;
-        }
-        onChange({ ...settings, [setting]: value });
-    };
-
     return (
         <div className="absolute top-full left-0 mt-2 w-64 bg-[#1e1e3e] border border-purple-500/50 rounded-lg shadow-lg p-4 z-20">
             <div className="space-y-4">
@@ -2015,26 +1842,20 @@ const SettingsPopover: React.FC<{
                     <span className="font-semibold">{t('internet_search')}</span>
                     <input type="checkbox" className="toggle-switch" checked={settings.useInternetSearch} onChange={e => onChange({...settings, useInternetSearch: e.target.checked})}/>
                 </label>
-                <div 
-                    className={`flex items-center justify-between ${!hasPointsForFeatures ? 'opacity-50' : 'cursor-pointer'}`}
-                    onClick={() => handleToggle('useDeepThinking', !settings.useDeepThinking)}
-                >
+                <label className="flex items-center justify-between cursor-pointer">
                     <div className="flex items-center gap-2">
                         <span className="font-semibold">{t('deep_thinking')}</span>
                         <span className="text-xs text-purple-400">({t('deep_thinking_cost_info')})</span>
                     </div>
-                     <input type="checkbox" className="toggle-switch" checked={settings.useDeepThinking} readOnly disabled={!hasPointsForFeatures}/>
-                </div>
-                 <div
-                    className={`flex items-center justify-between ${!hasPointsForFeatures ? 'opacity-50' : 'cursor-pointer'}`}
-                    onClick={() => handleToggle('useScientificMode', !settings.useScientificMode)}
-                >
+                     <input type="checkbox" className="toggle-switch" checked={settings.useDeepThinking} onChange={e => onChange({...settings, useDeepThinking: e.target.checked})}/>
+                </label>
+                 <label className="flex items-center justify-between cursor-pointer">
                     <div className="flex items-center gap-2">
                         <span className="font-semibold">{t('scientific_mode')}</span>
                         <span className="text-xs text-purple-400">({t('scientific_mode_cost_info')})</span>
                     </div>
-                     <input type="checkbox" className="toggle-switch" checked={settings.useScientificMode} readOnly disabled={!hasPointsForFeatures}/>
-                </div>
+                     <input type="checkbox" className="toggle-switch" checked={settings.useScientificMode} onChange={e => onChange({...settings, useScientificMode: e.target.checked})}/>
+                </label>
             </div>
         </div>
     );
@@ -2183,8 +2004,8 @@ const WelcomeScreen: React.FC<{ onPromptSelect: (prompt: string) => void }> = ({
     const { t } = useLanguage();
     const suggestions = [
         { title: t('welcome_suggestion1_title'), prompt: t('welcome_suggestion1_prompt')},
-        { title: t('welcome_suggestion2_title'), prompt: t('welcome_suggestion2_prompt')},
         { title: t('welcome_suggestion_youtube_title'), prompt: t('welcome_suggestion_youtube_prompt')},
+        { title: t('welcome_suggestion3_title'), prompt: t('welcome_suggestion3_prompt')},
         { title: t('welcome_suggestion4_title'), prompt: t('welcome_suggestion4_prompt')},
     ];
 
@@ -2216,11 +2037,9 @@ interface MainChatInterfaceProps {
     onToggleDrawer: () => void;
     onStudyFollowUp: (type: 'review' | 'quiz', topic: string) => void;
     onPlayVideo: (videoId: string) => void;
-    userPoints: number;
-    onNoPoints: () => void;
 }
 
-const MainChatInterface: React.FC<MainChatInterfaceProps> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer, onStudyFollowUp, onPlayVideo, userPoints, onNoPoints }) => {
+const MainChatInterface: React.FC<MainChatInterfaceProps> = ({ session, isLoading, onSettingsChange, onSaveMemory, onPreviewCode, onAddKnowledgeFile, onDeleteKnowledgeFile, onUpdateMessageContent, onToggleDrawer, onStudyFollowUp, onPlayVideo }) => {
     const { t } = useLanguage();
     const [showSettings, setShowSettings] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -2250,9 +2069,9 @@ const MainChatInterface: React.FC<MainChatInterfaceProps> = ({ session, isLoadin
 
     return (
         <>
-            <header className="p-4 flex justify-between items-center shrink-0 z-10 border-b border-white/10">
+            <header className="p-4 flex justify-between items-center shrink-0 z-10 border-b border-purple-500/10">
                  <div className="flex items-center gap-2">
-                    <button onClick={onToggleDrawer} className="p-2 rounded-full hover:bg-white/10 lg:hidden">
+                    <button onClick={onToggleDrawer} className="p-2 rounded-full hover:bg-purple-500/20 lg:hidden">
                         <i className="fas fa-bars"></i>
                     </button>
                     <div className="flex-1">
@@ -2260,7 +2079,7 @@ const MainChatInterface: React.FC<MainChatInterfaceProps> = ({ session, isLoadin
                         {session.knowledgeFiles && session.knowledgeFiles.length > 0 && (
                             <div className="flex gap-2 mt-1 flex-wrap">
                                 {session.knowledgeFiles.map((file, index) => (
-                                    <div key={index} className="bg-white/10 text-xs px-2 py-1 rounded-full flex items-center gap-1.5">
+                                    <div key={index} className="bg-purple-500/20 text-xs px-2 py-1 rounded-full flex items-center gap-1.5">
                                         <FileTextIcon />
                                         <span className="truncate max-w-[100px]">{file.name}</span>
                                         <button onClick={() => onDeleteKnowledgeFile(index)} className="text-gray-400 hover:text-white"><CloseIcon/></button>
@@ -2272,9 +2091,9 @@ const MainChatInterface: React.FC<MainChatInterfaceProps> = ({ session, isLoadin
                 </div>
                 <div className="relative flex items-center gap-2" ref={settingsRef}>
                     <input type="file" ref={knowledgeFileInputRef} onChange={handleKnowledgeFileChange} className="hidden" accept=".pdf,.txt,.md,.csv,.xlsx,.xls" />
-                    <button onClick={() => knowledgeFileInputRef.current?.click()} className="p-2 rounded-full hover:bg-white/10 bg-black/20" title={t('add_knowledge_file_chat')}><BookOpenIcon /></button>
-                    <button onClick={() => setShowSettings(s => !s)} className="p-2 rounded-full hover:bg-white/10 bg-black/20" title={t('current_chat_settings')}><SettingsIcon /></button>
-                    {showSettings && <SettingsPopover settings={session.settings} onChange={onSettingsChange} userPoints={userPoints} onNoPoints={onNoPoints} />}
+                    <button onClick={() => knowledgeFileInputRef.current?.click()} className="p-2 rounded-full hover:bg-purple-500/20 bg-black/20" title={t('add_knowledge_file_chat')}><BookOpenIcon /></button>
+                    <button onClick={() => setShowSettings(s => !s)} className="p-2 rounded-full hover:bg-purple-500/20 bg-black/20" title={t('current_chat_settings')}><SettingsIcon /></button>
+                    {showSettings && <SettingsPopover settings={session.settings} onChange={onSettingsChange} />}
                 </div>
             </header>
             <div className="flex-1 h-[1px] overflow-y-auto p-0 md:p-4">
@@ -2331,7 +2150,7 @@ const ChatInputBar: React.FC<{
 
     return (
          <div className="p-4 bg-transparent relative shrink-0">
-            <div className="max-w-4xl mx-auto flex items-center gap-2 p-2 rounded-full bg-input-bar-bg backdrop-blur-md border border-white/10 shadow-2xl shadow-black/50">
+            <div className="max-w-4xl mx-auto flex items-center gap-2 p-2 rounded-full bg-[rgba(12,12,31,0.8)] backdrop-blur-md border border-purple-500/30 shadow-2xl shadow-black/50">
                 <input
                     type="text"
                     value={input}
@@ -2344,7 +2163,7 @@ const ChatInputBar: React.FC<{
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.txt,.md,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.mp4,.mp3,.wav"/>
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center justify-center text-gray-400 w-10 h-10 rounded-full transition-colors duration-300 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                    className="flex items-center justify-center text-gray-400 w-10 h-10 rounded-full transition-colors duration-300 hover:bg-purple-500/20 hover:text-white disabled:opacity-50"
                     disabled={isLoading}
                     title={t('upload_file')}
                 >
@@ -2352,7 +2171,7 @@ const ChatInputBar: React.FC<{
                 </button>
                 <button
                     onClick={handleSend}
-                    className="bg-blue-gradient text-white w-10 h-10 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center hover:scale-105 hover:shadow-[0_0_15px_rgba(138,43,226,0.5)] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-500 disabled:shadow-none"
+                    className="bg-gradient-to-r from-[#8a2be2] to-[#00bfff] text-white w-10 h-10 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center hover:scale-105 hover:shadow-[0_0_15px_rgba(138,43,226,0.5)] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-500 disabled:shadow-none"
                     disabled={isLoading || (!input.trim() && !filePreview.isOpen)}>
                     <PaperPlaneIcon />
                 </button>
@@ -2380,14 +2199,12 @@ interface ChatViewProps {
     setTemporarySession: React.Dispatch<React.SetStateAction<ChatSession | null>>;
     onToggleDrawer: () => void;
     deductPoints: (amount: number) => boolean;
-    userPoints: number;
-    onNoPoints: () => void;
 }
 
 const ChatView: React.FC<ChatViewProps> = ({ 
     globalSettings, userProfile, generalMemories, savedMemories, customTools, onUpdateUserProfile, onSaveMemory, onImageGenerated,
     sessions, setSessions, activeId, setActiveId, createNewSession, createTempSession,
-    temporarySession, setTemporarySession, onToggleDrawer, deductPoints, userPoints, onNoPoints
+    temporarySession, setTemporarySession, onToggleDrawer, deductPoints
 }) => {
     const { language, t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
@@ -2475,31 +2292,35 @@ const ChatView: React.FC<ChatViewProps> = ({
         let isCommand = false;
         
         // --- Calculate Cost ---
-        if (lowerPrompt.startsWith('/image ')) { isCommand = true; cost = 20; }
-        else if (lowerPrompt.startsWith('/youtube ')) { isCommand = true; cost = 25; }
-        else if (lowerPrompt.startsWith('/resume')) { isCommand = true; cost = 100; }
-        else if (lowerPrompt.startsWith('/report')) { isCommand = true; cost = 75; }
-        else if (lowerPrompt.startsWith('/project')) { isCommand = true; cost = 150; }
-        else if (lowerPrompt.startsWith('/chart') || lowerPrompt.startsWith('/table')) { isCommand = true; cost = 30; }
+        if (lowerPrompt.startsWith('/image ')) {
+            isCommand = true;
+            cost = 20;
+        } else if (lowerPrompt.startsWith('/youtube ')) {
+            isCommand = true;
+            cost = 25;
+        } else if (lowerPrompt.startsWith('/resume')) {
+            isCommand = true;
+            cost = 100;
+        } else if (lowerPrompt.startsWith('/report')) {
+            isCommand = true;
+            cost = 75;
+        } else if (lowerPrompt.startsWith('/project')) {
+            isCommand = true;
+            cost = 150;
+        } else if (lowerPrompt.startsWith('/chart') || lowerPrompt.startsWith('/table')) {
+            isCommand = true;
+            cost = 30;
+        }
 
+        // If not a command, check for settings for per-message cost
         if (!isCommand) {
             if (activeSession.settings.useDeepThinking) cost += 5;
             if (activeSession.settings.useScientificMode) cost += 10;
         }
 
-        // --- Handle Insufficient Points ---
-        if (cost > 0 && userPoints < cost) {
-            const noPointsMessage: Message = { id: Date.now().toString(), role: 'model', content: t('no_points_chat_message') };
-            const updater = (s: ChatSession | null) => s ? { ...s, messages: [...s.messages, noPointsMessage] } : null;
-            if (isTempChat) setTemporarySession(updater);
-            else setSessions(s => ({ ...s, [sessionId]: updater(s[sessionId])! }));
-            onNoPoints();
-            return;
-        }
-
         // --- Deduct Points ---
         if (cost > 0 && !deductPoints(cost)) {
-            return; // Should not happen if check above is correct, but as a safeguard.
+            return; // Stop if not enough points
         }
         
         // --- Add User Message to UI ---
@@ -2553,7 +2374,7 @@ const ChatView: React.FC<ChatViewProps> = ({
              try {
                 const imagePrompt = prompt.replace(/\/image\s+/i, '').trim();
                 const enhancedPrompt = await enhancePromptForImage(imagePrompt, 'cinematic');
-                const generatedUrls = await generateImage(enhancedPrompt, '1:1', 1);
+                const generatedUrls = await generateImageService(enhancedPrompt, '1:1', 1);
 
                 const newHistoryItem: ImageHistoryItem = { id: Date.now().toString(), urls: generatedUrls, prompt: imagePrompt, enhancedPrompt, model: 'gemini', style: 'cinematic', aspectRatio: '1:1', timestamp: Date.now() };
                 onImageGenerated(newHistoryItem);
@@ -2600,7 +2421,7 @@ const ChatView: React.FC<ChatViewProps> = ({
             try {
                 const potentialJson = fullResponse.substring(fullResponse.indexOf('{'), fullResponse.lastIndexOf('}') + 1);
                 const parsed = JSON.parse(potentialJson);
-                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project', 'study_explanation', 'study_review', 'study_quiz', 'youtube_search_results', 'article_review'].includes(parsed.type)) {
+                if (parsed.type && ['table', 'chart', 'report', 'news_report', 'resume', 'code_project', 'study_explanation', 'study_review', 'study_quiz', 'youtube_search_results'].includes(parsed.type)) {
                     finalContent = (parsed.type === 'resume') ? { ...parsed, template: 'elegant' } : parsed;
                 }
             } catch (e) { /* Not JSON, treat as text */ }
@@ -2722,8 +2543,6 @@ const ChatView: React.FC<ChatViewProps> = ({
                         onToggleDrawer={onToggleDrawer}
                         onStudyFollowUp={handleStudyFollowUp}
                         onPlayVideo={handlePlayVideo}
-                        userPoints={userPoints}
-                        onNoPoints={onNoPoints}
                     />
                  )}
                  <ChatInputBar 
@@ -2763,41 +2582,6 @@ const Modal: React.FC<{ children: React.ReactNode, title: string, onClose: () =>
                 </div>
             </div>
         </div>
-    );
-};
-
-const SubscriptionModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const { t } = useLanguage();
-
-    return (
-        <Modal title={t('subscribe_title')} onClose={onClose} size="lg">
-            <div className="space-y-6 text-center">
-                <p className="text-lg">{t('subscribe_description')}</p>
-                <div className="my-4">
-                    <span className="text-5xl font-bold bg-gradient-to-l from-[#8a2be2] to-[#00bfff] text-transparent bg-clip-text">$29</span>
-                    <span className="text-xl text-gray-400">/ {t('subscribe_month')}</span>
-                </div>
-
-                <div className="text-right space-y-4">
-                    <div>
-                        <h3 className="font-bold text-lg mb-2">{t('subscribe_vodafone_cash_title')}</h3>
-                        <p>{t('subscribe_vodafone_cash_desc')}</p>
-                        <div className="flex items-center justify-center mt-2 p-3 bg-gray-900/50 rounded-lg">
-                            <span className="font-mono text-xl text-purple-300 tracking-widest">01099113383</span>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-lg mb-2">{t('subscribe_instapay_title')}</h3>
-                        <p>{t('subscribe_instapay_desc')}</p>
-                         <div className="flex items-center justify-center mt-2 p-3 bg-gray-900/50 rounded-lg">
-                            <span className="font-mono text-xl text-purple-300">m.ibrahim.abdullah.m@gmail.com</span>
-                        </div>
-                    </div>
-                </div>
-
-                <p className="text-sm text-gray-400 pt-4 border-t border-purple-500/20">{t('subscribe_confirmation')}</p>
-            </div>
-        </Modal>
     );
 };
 
@@ -2863,7 +2647,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     
     const [userPoints, setUserPoints] = useState(300);
-    const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
     // Load data and manage points on mount
     useEffect(() => {
@@ -2939,11 +2722,8 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             localStorage.setItem('nova-user-points', newPoints.toString());
             return true;
         }
+        alert(t('not_enough_points'));
         return false;
-    };
-    
-    const handleNoPoints = () => {
-        setShowSubscriptionModal(true);
     };
 
     // Save chat sessions to local storage
@@ -3114,8 +2894,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         setTemporarySession={setTemporarySession}
                         onToggleDrawer={() => setIsDrawerOpen(p => !p)}
                         deductPoints={deductPoints}
-                        userPoints={userPoints}
-                        onNoPoints={handleNoPoints}
                     />
                  );
             case View.CREATIVE_STUDIO:
@@ -3127,7 +2905,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         onVideoGenerated={handleVideoGenerated}
                         userPoints={userPoints}
                         deductPoints={deductPoints}
-                        onNoPoints={handleNoPoints}
                     />
                 );
             default:
@@ -3152,8 +2929,6 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         setTemporarySession={setTemporarySession}
                         onToggleDrawer={() => setIsDrawerOpen(p => !p)}
                         deductPoints={deductPoints}
-                        userPoints={userPoints}
-                        onNoPoints={handleNoPoints}
                     />
                 );
         }
@@ -3187,13 +2962,12 @@ const ApplicationShell: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
     return (
         <div className="w-full h-full flex flex-row">
-            <div className="flex-1 flex flex-col overflow-y-auto md:overflow-hidden relative">
-                <button onClick={() => setIsSidebarCollapsed(p => !p)} className="absolute top-1/2 -translate-y-1/2 left-4 w-7 h-7 bg-sidebar-bg border border-white/10 rounded-full hidden lg:flex items-center justify-center text-gray-400 hover:bg-white/10 z-20">
+            <div className="flex-1 flex flex-col overflow-hidden relative">
+                <button onClick={() => setIsSidebarCollapsed(p => !p)} className="absolute top-1/2 -translate-y-1/2 left-4 w-7 h-7 bg-[#0c0c1f] border border-purple-500/30 rounded-full hidden lg:flex items-center justify-center text-gray-400 hover:bg-purple-500/20 z-20">
                     {isSidebarCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
                 </button>
                 {renderMainView()}
                 {renderActiveModal()}
-                {showSubscriptionModal && <SubscriptionModal onClose={() => setShowSubscriptionModal(false)} />}
             </div>
             {isDrawerOpen && <div className="lg:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setIsDrawerOpen(false)} />}
             <MainSidebar
@@ -3531,23 +3305,8 @@ const App: React.FC = () => {
         <LanguageProvider>
             <AppContent />
             <style>{`
-                :root {
-                    --app-bg: #131314;
-                    --sidebar-bg: rgba(22, 23, 26, 0.8);
-                    --input-bar-bg: #1e1f20;
-                    --model-message-bg: #2d2e30;
-                    --blue-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
-                }
+                :root { --custom-scroll-track: #0a0a1a; --custom-scroll-thumb: #8a2be2; }
                 html { scroll-behavior: smooth; }
-                body {
-                    background-color: var(--app-bg);
-                    font-family: 'Cairo', sans-serif;
-                }
-                .bg-blue-gradient { background: var(--blue-gradient); }
-                .bg-sidebar-bg { background-color: var(--sidebar-bg); }
-                .bg-input-bar-bg { background-color: var(--input-bar-bg); }
-                .bg-model-message-bg { background-color: var(--model-message-bg); }
-
                 .prose { color: #f0f0ff; }
                 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { color: #f0f0ff; }
                 .btn-primary {
@@ -3585,7 +3344,6 @@ const App: React.FC = () => {
                 .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background-color: white; border-radius: 9999px; transition: transform 0.2s; }
                 .toggle-switch:checked { background-color: #8a2be2; }
                 .toggle-switch:checked::after { transform: translateX(20px); }
-                .toggle-switch:disabled { opacity: 0.5; cursor: not-allowed; }
                 .suggestion-card { text-align: right; background-color: rgba(30, 30, 62, 0.5); border: 1px solid rgba(138, 43, 226, 0.2); padding: 1rem; border-radius: 0.75rem; transition: all 0.2s ease-in-out; }
                 .suggestion-card:hover { background-color: rgba(45, 45, 80, 0.8); border-color: #8a2be2; transform: translateY(-4px); }
                 .capability-tab {
@@ -3611,77 +3369,42 @@ const App: React.FC = () => {
                     box-shadow: 0 0 15px rgba(138, 43, 226, 0.5);
                 }
 
-                /* PDF Export Styles */
-                .pdf-export-active {
-                    background-color: #ffffff !important;
-                    color: #000000 !important;
-                    font-family: 'Cairo', sans-serif !important;
-                }
-                .pdf-export-active, .pdf-export-active * {
-                    color: #000000 !important;
-                    background-color: transparent !important;
-                    border-color: #cccccc !important;
-                    text-shadow: none !important;
-                }
-                .pdf-export-active .report-title, .pdf-export-active .report-section-title {
-                     border-bottom-color: #333333 !important;
-                }
-                .pdf-export-active .resume-header {
-                     border-bottom-color: #333333 !important;
-                }
-                /* Ensure specific resume templates still look okay */
-                .pdf-export-active .creative-template .resume-header {
-                    background-color: #343a40 !important;
-                }
-                 .pdf-export-active .creative-template .resume-header * {
-                    color: #ffffff !important;
-                }
-
-
-                /* A4 Report View Styles */
-                .report-view-a4-container { background-color: #333; padding: 2rem; overflow-x: auto; }
-                .report-view-a4 {
+                /* Canvas View Styles */
+                .canvas-view {
                     background-color: #ffffff;
                     color: #1f2937;
-                    padding: 2cm;
-                    width: 21cm;
-                    min-height: 29.7cm;
-                    margin: 0 auto;
-                    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+                    padding: 2rem;
+                    border-radius: 0 0 0.5rem 0.5rem;
                     direction: rtl;
                     text-align: right;
-                    font-family: 'Cairo', 'Times New Roman', serif;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 }
-                .report-view-a4 [contenteditable]:focus {
+                .canvas-view [contenteditable]:focus {
                     outline: 2px solid #8a2be2;
                     box-shadow: 0 0 5px rgba(138, 43, 226, 0.5);
                     border-radius: 4px;
                 }
-                .report-view-a4 .report-title {
-                    font-size: 24pt;
-                    font-weight: bold;
+                .canvas-title {
+                    font-size: 2.25rem;
+                    font-weight: 800;
                     color: #111827;
-                    text-align: center;
-                    border-bottom: 2px solid #333;
-                    padding-bottom: 0.5cm;
-                    margin-bottom: 1cm;
+                    border-bottom: 2px solid #e5e7eb;
+                    padding-bottom: 0.75rem;
+                    margin-bottom: 1.5rem;
                 }
-                .report-view-a4 .report-section-title {
-                    font-size: 16pt;
-                    font-weight: bold;
-                    color: #333;
-                    margin-top: 1cm;
-                    margin-bottom: 0.5cm;
-                    border-bottom: 1px solid #ccc;
-                    padding-bottom: 0.2cm;
+                .canvas-section-title {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: #8a2be2;
+                    margin-top: 1.75rem;
+                    margin-bottom: 0.5rem;
                 }
-                .report-view-a4 .report-section-content {
-                    font-size: 12pt;
-                    line-height: 1.6;
+                .canvas-section-content {
+                    font-size: 1rem;
+                    line-height: 1.75;
                     color: #374151;
                     white-space: pre-wrap;
                 }
-
                 /* --- Resume View General Styles --- */
                 .resume-control-btn {
                     background-color: rgba(255, 255, 255, 0.1);
@@ -3702,7 +3425,7 @@ const App: React.FC = () => {
                 }
                 .resume-template-btn:hover { color: white; background-color: rgba(138, 43, 226, 0.4); }
                 .resume-template-btn.active { color: white; background-color: #8a2be2; }
-                .resume-view { background-color: #fff; color: #333; overflow: hidden; font-family: 'Cairo', sans-serif; }
+                .resume-view { background-color: #fff; color: #333; overflow: hidden; }
                 .resume-view h1, .resume-view h2, .resume-view h3, .resume-view h4, .resume-view h5, .resume-view h6, .resume-view p, .resume-view li, .resume-view span, .resume-view a { font-family: inherit; }
                 .resume-section { margin-bottom: 1.25rem; }
                 .resume-section h3 { font-weight: bold; }
@@ -3717,7 +3440,7 @@ const App: React.FC = () => {
                 .resume-contact-sidebar { display: none; }
 
                 /* --- Elegant Template --- */
-                .elegant-template { font-family: 'Cairo', 'Times New Roman', serif; color: #1a202c; padding: 2.5rem; direction: rtl; text-align: right;}
+                .elegant-template { font-family: 'Times New Roman', Times, serif; color: #1a202c; padding: 2.5rem; direction: rtl; text-align: right;}
                 .elegant-template .resume-body-container { display: flex; gap: 2rem; }
                 .elegant-template .resume-main-content { flex: 2; }
                 .elegant-template .resume-sidebar { flex: 1; border-right: 1px solid #e2e8f0; padding-right: 1.5rem; }
@@ -3725,16 +3448,20 @@ const App: React.FC = () => {
                 .elegant-template .resume-header .profile-picture-container { display: none; }
                 .elegant-template .resume-header h1 { font-size: 2.75rem; font-weight: bold; letter-spacing: 2px; color: #2d3748; margin: 0; }
                 .elegant-template .resume-header h2 { font-size: 1.2rem; font-weight: normal; color: #4a5568; margin-bottom: 0.75rem; }
-                .elegant-template .resume-header .resume-contact { justify-content: center; font-size: 0.85rem; color: #4a5568; }
+                .elegant-template .resume-header .resume-contact { justify-content: center; font-family: 'Helvetica', sans-serif; font-size: 0.85rem; color: #4a5568; }
                 .elegant-template .resume-section h3 { font-size: 1.2rem; color: #2d3748; border-bottom: 1px solid #718096; padding-bottom: 0.3rem; margin-bottom: 1rem; letter-spacing: 1px; }
+                .elegant-template .resume-main-content p { font-family: 'Georgia', serif; line-height: 1.6; }
                 .elegant-template .resume-item { margin-bottom: 1.25rem; }
                 .elegant-template .resume-item h4 { font-size: 1.1rem; color: #2d3748; }
-                .elegant-template .resume-item h5, .elegant-template .resume-item h6 { font-size: 0.9rem; font-style: italic; color: #718096; }
+                .elegant-template .resume-item h5, .elegant-template .resume-item h6 { font-size: 0.9rem; font-style: italic; color: #718096; font-family: 'Helvetica', sans-serif; }
+                .elegant-template .resume-item ul { font-family: 'Georgia', serif; color: #4a5568; }
+                .elegant-template .resume-sidebar .resume-contact, .elegant-template .resume-sidebar .resume-item, .elegant-template .resume-sidebar .skills-category { font-family: 'Helvetica', sans-serif; font-size: 0.9rem; }
+                .elegant-template .resume-sidebar h4 { font-size: 1rem; }
                 .elegant-template .resume-sidebar .skills-category { margin-bottom: 0.75rem; }
                 .elegant-template .resume-sidebar .skills-category p { font-size: 0.85rem; color: #4a5568; }
 
                 /* --- Modern Template --- */
-                .modern-template { padding: 2rem; direction: rtl; text-align: right;}
+                .modern-template { padding: 2rem; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; direction: rtl; text-align: right;}
                 .modern-template .resume-header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 1rem; margin-bottom: 1.5rem; }
                 .modern-template .profile-picture-container { width: 120px; height: 120px; border-radius: 50%; border: 4px solid #8a2be2; margin-bottom: 1rem; }
                 .modern-template .resume-header h1 { font-size: 2.5rem; font-weight: 700; color: #8a2be2; margin: 0; }
@@ -3747,7 +3474,7 @@ const App: React.FC = () => {
                 .modern-template .skills-category h4 { font-weight: bold; margin-bottom: 0.25rem; }
 
                 /* --- Classic Template --- */
-                .classic-template { font-family: 'Cairo', 'Times New Roman', serif; padding: 2.5rem; direction: rtl; text-align: right;}
+                .classic-template { font-family: 'Georgia', serif; padding: 2.5rem; direction: rtl; text-align: right;}
                 .classic-template .profile-picture-container { display: none; }
                 .classic-template .resume-header { text-align: center; margin-bottom: 2rem; }
                 .classic-template .resume-header h1 { font-size: 2.5rem; font-weight: bold; }
@@ -3758,28 +3485,104 @@ const App: React.FC = () => {
                 .classic-template .resume-item h4 { font-size: 1.1rem; }
                 .classic-template .skills-category h4 { font-size: 1rem; }
 
-                /* --- Creative Template --- */
-                .creative-template { background-color: #f8f9fa; color: #212529; direction: rtl; text-align: right;}
-                .creative-template .resume-header { background-color: #343a40; color: #fff; padding: 2.5rem 1.5rem; text-align: center; }
-                .creative-template .profile-picture-container { width: 140px; height: 140px; border-radius: 50%; border: 4px solid #fff; margin-bottom: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+                /* --- Creative Template (REVISED & FIXED) --- */
+                .creative-template {
+                    background-color: #fff; /* White background for the main page area */
+                    color: #212529;
+                    font-family: 'Tahoma', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                    direction: rtl; 
+                    text-align: right;
+                }
+                .creative-template .resume-header {
+                    background-color: #343a40;
+                    color: #fff;
+                    padding: 2.5rem 1.5rem;
+                    text-align: center;
+                }
+                .creative-template .profile-picture-container {
+                    width: 140px;
+                    height: 140px;
+                    border-radius: 50%;
+                    border: 4px solid #fff;
+                    margin-bottom: 1rem;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                }
                 .creative-template .resume-header-text { margin-bottom: 1rem; }
-                .creative-template .resume-header h1 { font-size: 2.8rem; font-weight: 700; margin: 0; }
-                .creative-template .resume-header h2 { font-size: 1.4rem; font-weight: 300; color: #ced4da; margin-top: 0.25rem; }
-                .creative-template .resume-header .resume-contact { justify-content: center; font-size: 0.9rem; gap: 0.8rem 1.5rem; }
-                .creative-template .resume-header .resume-contact a { color: #adb5bd; text-decoration: none; transition: color 0.2s; }
+                .creative-template .resume-header h1 {
+                    font-size: 2.8rem;
+                    font-weight: 700;
+                    margin: 0;
+                }
+                .creative-template .resume-header h2 {
+                    font-size: 1.4rem;
+                    font-weight: 300;
+                    color: #ced4da;
+                    margin-top: 0.25rem;
+                }
+                .creative-template .resume-header .resume-contact {
+                    justify-content: center;
+                    font-size: 0.9rem;
+                    gap: 0.8rem 1.5rem;
+                }
+                .creative-template .resume-header .resume-contact a {
+                    color: #adb5bd;
+                    text-decoration: none;
+                    transition: color 0.2s;
+                }
                 .creative-template .resume-header .resume-contact a:hover { color: #fff; }
                 .creative-template .resume-header .resume-contact i { color: #007bff; }
-                .creative-template .resume-body-container { display: flex; flex-direction: row-reverse; padding: 2rem; gap: 2rem; background-color: #fff; }
-                .creative-template .resume-main-content { flex: 2; min-width: 0; }
-                .creative-template .resume-sidebar { flex: 1; min-width: 0; }
+
+                .creative-template .resume-body-container {
+                    display: flex;
+                    flex-direction: row-reverse; /* Sidebar on right */
+                    padding: 2rem;
+                    gap: 2rem;
+                    background-color: #f8f9fa;
+                }
+                .creative-template .resume-main-content {
+                    flex: 2;
+                    min-width: 0;
+                }
+                .creative-template .resume-sidebar {
+                    flex: 1;
+                    min-width: 0;
+                }
                 .creative-template .resume-contact-sidebar { display: none; }
-                .creative-template .resume-section h3 { font-size: 1.3rem; font-weight: 700; color: #007bff; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+                
+                .creative-template .resume-section h3 {
+                    font-size: 1.3rem;
+                    font-weight: 700;
+                    color: #007bff;
+                    border-bottom: 2px solid #dee2e6;
+                    padding-bottom: 0.5rem;
+                    margin-bottom: 1.5rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                }
                 .creative-template .resume-section h3 i { display: inline-block; font-size: 1.1rem; }
+
+                .creative-template .resume-main-content .resume-item h4 { font-size: 1.1rem; font-weight: bold; }
+                .creative-template .resume-main-content .resume-item h5 { font-size: 1rem; color: #495057; margin: 0.2rem 0; }
+                .creative-template .resume-main-content .resume-item h6 { font-size: 0.9rem; color: #6c757d; margin-bottom: 0.5rem; }
+                .creative-template .resume-main-content .resume-item ul { color: #343a40; padding-right: 1.5rem; list-style-position: outside; }
+                .creative-template .resume-main-content .resume-item li { margin-bottom: 0.3rem; line-height: 1.6; }
                 .creative-template .resume-main-content p { line-height: 1.6; color: #343a40; }
+                
+                .creative-template .resume-sidebar .resume-item h4 { font-size: 1.05rem; }
+                .creative-template .resume-sidebar .resume-item h5,
+                .creative-template .resume-sidebar .resume-item h6 { font-size: 0.9rem; }
+                .creative-template .skills-category h4 { font-weight: bold; color: #212529; font-size: 1rem; margin-bottom: 0.4rem; }
                 .creative-template .skills-category p { font-size: 0.9rem; line-height: 1.7; color: #495057; }
                 
+                @media (max-width: 768px) {
+                    .creative-template .resume-body-container {
+                        flex-direction: column;
+                    }
+                }
+                
                 /* --- ATS Template --- */
-                .ats-template { background-color: #fff; color: #000; padding: 2rem; font-size: 11pt; direction: rtl; text-align: right;}
+                .ats-template { background-color: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 2rem; font-size: 11pt; direction: rtl; text-align: right;}
                 .ats-template .profile-picture-container, .ats-template .resume-sidebar, .ats-template .resume-section h3 i { display: none; }
                 .ats-template .resume-header { text-align: center; margin-bottom: 1.5rem; }
                 .ats-template .resume-header h1 { font-size: 1.8rem; font-weight: bold; margin-bottom: 0.25rem; }
@@ -3787,12 +3590,18 @@ const App: React.FC = () => {
                 .ats-template .resume-contact { justify-content: center; font-size: 10pt; }
                 .ats-template .resume-section { margin-bottom: 0.5rem; }
                 .ats-template .resume-section h3 { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 0.25rem; margin: 1rem 0 0.5rem; text-transform: uppercase; }
+                .ats-template .resume-item { margin-bottom: 0.75rem; }
+                .ats-template .resume-item h4 { font-size: 1rem; font-weight: bold; }
+                .ats-template .resume-item h5 { font-size: 0.9rem; font-style: normal; color: #333; }
+                .ats-template .resume-item h6 { font-size: 0.9rem; color: #555; }
+                .ats-template .resume-item ul { list-style-type: disc; padding-right: 20px; }
+                .ats-template .skills-category h4 { font-weight: bold; margin-bottom: 0.25rem; }
+                .ats-template .skills-category p { margin-top: 0; }
                 
                 /* Markdown Table Styles */
-                .markdown-table { border: 1px solid rgba(138,43,226,0.3); border-collapse: collapse; width: 100%; margin: 1rem 0; }
+                .markdown-table { border: 1px solid rgba(138,43,226,0.3); border-collapse: collapse; width: 100%; }
                 .markdown-table th, .markdown-table td { border: 1px solid rgba(138,43,226,0.3); padding: 8px 12px; text-align: right; }
-                .markdown-table th { background-color: rgba(30,30,62,0.8); font-weight: bold; }
-                .markdown-table tbody tr:nth-child(even) { background-color: rgba(255,255,255,0.05); }
+                .markdown-table th { background-color: rgba(30,30,62,0.8); }
 
                 /* Study Mode View Styles */
                 .study-session-view { background: rgba(10,10,26,0.5); border-radius: 0.75rem; border: 1px solid rgba(138,43,226,0.2); padding: 1.5rem; }
@@ -3838,42 +3647,6 @@ const App: React.FC = () => {
                     width: 100%;
                     height: 100%;
                     border: 0;
-                }
-                
-                /* KaTeX and Mermaid Styles */
-                .katex-display {
-                    padding: 0.5rem 0;
-                    overflow-x: auto;
-                    overflow-y: hidden;
-                }
-                .mermaid-container {
-                    background-color: #242424;
-                    padding: 1rem;
-                    border-radius: 0.5rem;
-                    margin: 0;
-                    display: flex;
-                    justify-content: center;
-                    overflow: auto;
-                }
-                .mermaid-container svg {
-                    max-width: 100%;
-                    height: auto;
-                }
-                .diagram-download-btn {
-                    background-color: rgba(10, 10, 26, 0.8);
-                    backdrop-filter: blur(4px);
-                    color: white;
-                    border: 1px solid rgba(138, 43, 226, 0.5);
-                    padding: 4px 10px;
-                    border-radius: 6px;
-                    font-size: 12px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-                .diagram-download-btn:hover {
-                    background-color: #8a2be2;
-                    border-color: #8a2be2;
                 }
 
             `}</style>
